@@ -25,8 +25,9 @@ repository foundation and the source author's implementation.
 3. Completed: resolve the README conflict, retaining main's scope/workflow
    and source usage, stack, and team links. Other source files merge unchanged.
 4. Completed: inspect implementation and run all required Rust checks.
-5. Delivery: commit, push the new branch, and open a PR continuing #1;
-   do not merge main or close the original PR.
+5. Completed: committed and pushed the new branch; opened
+   [PR #12](https://github.com/kiruimaru/Fuzzy-Music/pull/12) continuing #1
+   and requested review from `kiruimaru`. Neither PR was merged or closed.
 
 ## Verification
 
@@ -40,10 +41,11 @@ repository foundation and the source author's implementation.
 ## Handoff
 
 - Branch: `feat/soundcloud-main-integration`.
+- Integration commit: `02628f4`.
 - Implementation and original docs/scripts are retained from PR #1.
 - Updated README, project context, boundary status, and AI log.
 - Risks: source availability can change; raw extractor errors are not UI-safe;
   prototype types differ from the planned DTOs. See the contracts document.
-- Next action after PR creation: second-contributor review, then jointly agree
+- Next action: second-contributor review of PR #12, then jointly agree
   DTO/error mapping before implementing the application shell. No merge is
   authorized by this task.

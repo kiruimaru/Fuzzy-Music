@@ -41,4 +41,4 @@ cargo clippy --workspace --all-targets --locked -- -D warnings
 cargo fmt --all --check
 ```
 
-Подробности: [разработка и самостоятельная проверка модуля SoundCloud](docs/soundcloud-development.md).
+Подробности: [запуск и проверка SoundCloud](docs/soundcloud-development.md).

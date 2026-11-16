@@ -4,6 +4,26 @@ This document defines the first stable boundary between the React interface
 and the Rust core. It is intentionally source-agnostic: SoundCloud response
 objects must be normalized before they cross this boundary.
 
+## Prototype integration status
+
+`crates/soundcloud` is a standalone synchronous adapter/probe, not a Tauri
+command implementation. Its public Rust API is preserved from PR #1:
+
+- `Track` uses `uploader`, `duration_seconds`, and `webpage_url`, with optional
+  uploader metadata; the planned DTO uses `author`, `durationMs`, `streamUrl`,
+  and `source` with camelCase serialization.
+- `SearchResults` contains `query` and `tracks`, without pagination metadata.
+- `ResolvedStream` keeps the temporary stream URL and format separate from
+  track metadata.
+- `SoundCloudError` is not `AppError`; extractor diagnostics may contain raw
+  stderr and must not be forwarded directly to the UI.
+
+Before wiring Tauri, both module owners must agree on missing-author handling,
+duration conversion, pagination semantics, stream mapping, and safe error
+translation. Run synchronous adapter work off the UI thread and preserve
+timeout/cancellation. No implicit mapping or public API change is introduced
+by the integration task.
+
 ## Track
 
 ```ts

@@ -2,6 +2,12 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::{path::PathBuf, process::Command};
 
+mod control;
+mod error;
+mod process;
+pub use control::{CancellationToken, RequestOptions};
+pub use error::SoundCloudError;
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Track {
     pub id: String,
@@ -39,42 +45,73 @@ impl SoundCloudClient {
         }
     }
 
-    pub fn search(&self, query: &str, limit: usize) -> Result<SearchResults, String> {
+    pub fn search(&self, query: &str, limit: usize) -> Result<SearchResults, SoundCloudError> {
+        self.search_with_options(query, limit, &RequestOptions::default())
+    }
+
+    pub fn search_with_options(
+        &self,
+        query: &str,
+        limit: usize,
+        options: &RequestOptions,
+    ) -> Result<SearchResults, SoundCloudError> {
         let query = query.trim();
         if query.is_empty() {
-            return Err("Search query must not be empty".into());
+            return Err(SoundCloudError::InvalidInput(
+                "Search query must not be empty".into(),
+            ));
         }
         if !(1..=20).contains(&limit) {
-            return Err("For this probe, limit must be between 1 and 20".into());
+            return Err(SoundCloudError::InvalidInput(
+                "For this probe, limit must be between 1 and 20".into(),
+            ));
         }
         let target = format!("scsearch{limit}:{query}");
-        let data = self.extract(&target, true)?;
+        let data = self.extract(&target, true, options)?;
         let entries = data
             .get("entries")
             .and_then(Value::as_array)
-            .ok_or("Extractor returned an invalid search response (missing entries)")?;
+            .ok_or_else(|| {
+                SoundCloudError::InvalidResponse(
+                    "Extractor returned an invalid search response (missing entries)".into(),
+                )
+            })?;
         let tracks = entries
             .iter()
             .map(parse_track)
-            .collect::<Result<Vec<_>, _>>()?;
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(SoundCloudError::InvalidResponse)?;
         Ok(SearchResults {
             query: query.into(),
             tracks,
         })
     }
 
-    pub fn resolve(&self, track_url: &str) -> Result<ResolvedStream, String> {
+    pub fn resolve(&self, track_url: &str) -> Result<ResolvedStream, SoundCloudError> {
+        self.resolve_with_options(track_url, &RequestOptions::default())
+    }
+
+    pub fn resolve_with_options(
+        &self,
+        track_url: &str,
+        options: &RequestOptions,
+    ) -> Result<ResolvedStream, SoundCloudError> {
         if !is_soundcloud_url(track_url) {
-            return Err("Expected an HTTPS SoundCloud track URL".into());
+            return Err(SoundCloudError::InvalidInput(
+                "Expected an HTTPS SoundCloud track URL".into(),
+            ));
         }
-        let data = self.extract(track_url, false)?;
-        let url =
-            optional_string(&data, "url").ok_or("This track has no available audio stream")?;
+        let data = self.extract(track_url, false, options)?;
+        let url = optional_string(&data, "url").ok_or_else(|| {
+            SoundCloudError::InvalidResponse("This track has no available audio stream".into())
+        })?;
         if !url.starts_with("https://") {
-            return Err("Extractor returned a non-HTTPS stream URL".into());
+            return Err(SoundCloudError::InvalidResponse(
+                "Extractor returned a non-HTTPS stream URL".into(),
+            ));
         }
         Ok(ResolvedStream {
-            track: parse_track(&data)?,
+            track: parse_track(&data).map_err(SoundCloudError::InvalidResponse)?,
             url,
             protocol: optional_string(&data, "protocol"),
             format_id: optional_string(&data, "format_id"),
@@ -82,7 +119,12 @@ impl SoundCloudClient {
         })
     }
 
-    fn extract(&self, target: &str, flat: bool) -> Result<Value, String> {
+    fn extract(
+        &self,
+        target: &str,
+        flat: bool,
+        options: &RequestOptions,
+    ) -> Result<Value, SoundCloudError> {
         let mut command = Command::new(&self.executable);
         command.args([
             "--ignore-config",
@@ -104,24 +146,19 @@ impl SoundCloudClient {
             command.args(["--no-playlist", "--format", "bestaudio"]);
         }
         // No shell: queries and URLs are passed as a single argument after --.
-        let output = command.arg("--").arg(target).output().map_err(|e| {
-            format!(
-                "Could not start yt-dlp at {}: {e}",
-                self.executable.display()
-            )
-        })?;
+        let output = process::run(command.arg("--").arg(target), options)?;
         if !output.status.success() {
-            return Err(format!(
-                "SoundCloud extractor failed ({}): {}",
-                output.status,
-                String::from_utf8_lossy(&output.stderr).trim()
-            ));
+            return Err(SoundCloudError::ExtractorFailed {
+                status: output.status.to_string(),
+                details: String::from_utf8_lossy(&output.stderr).trim().into(),
+            });
         }
         if !output.stderr.is_empty() {
             eprintln!("{}", String::from_utf8_lossy(&output.stderr).trim());
         }
-        serde_json::from_slice(&output.stdout)
-            .map_err(|e| format!("Extractor returned invalid JSON: {e}"))
+        serde_json::from_slice(&output.stdout).map_err(|e| {
+            SoundCloudError::InvalidResponse(format!("Extractor returned invalid JSON: {e}"))
+        })
     }
 }
 
@@ -214,12 +251,19 @@ mod tests {
     #[test]
     fn invalid_input_is_rejected_before_starting_extractor() {
         let client = SoundCloudClient::new("does-not-exist");
-        assert!(client.search("  ", 5).unwrap_err().contains("empty"));
-        assert!(client.search("music", 0).unwrap_err().contains("limit"));
+        assert!(matches!(
+            client.search("  ", 5),
+            Err(SoundCloudError::InvalidInput(_))
+        ));
+        assert!(matches!(
+            client.search("music", 0),
+            Err(SoundCloudError::InvalidInput(_))
+        ));
         assert!(
             client
                 .resolve("https://example.com/")
                 .unwrap_err()
+                .to_string()
                 .contains("SoundCloud")
         );
     }

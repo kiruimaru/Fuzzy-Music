@@ -1,3 +1,4 @@
+mod dependencies;
 mod playback;
 
 use fuzzy_application::{
@@ -128,15 +129,11 @@ impl Shell {
         eprintln!("Network: {}", network.diagnostic());
         Self {
             application: Application::new(
-                SoundCloudClient::new(
-                    std::env::var_os("FUZZY_YTDLP").unwrap_or_else(|| "yt-dlp".into()),
-                )
-                .with_network(network.clone()),
+                SoundCloudClient::new(dependencies::executable("FUZZY_YTDLP", "yt-dlp"))
+                    .with_network(network.clone()),
             ),
             network,
-            mpv: std::env::var_os("FUZZY_MPV")
-                .map(PathBuf::from)
-                .unwrap_or_else(|| "mpv".into()),
+            mpv: dependencies::executable("FUZZY_MPV", "mpv"),
             control: Mutex::new(Control::default()),
             idle: Condvar::new(),
         }

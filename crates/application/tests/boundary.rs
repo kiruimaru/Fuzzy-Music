@@ -12,6 +12,33 @@ impl Drop for Fixture {
 }
 
 #[test]
+fn missing_and_corrupt_extractor_have_actionable_safe_errors() {
+    let directory = std::env::temp_dir().join(format!("fuzzy-api-damaged-{}", std::process::id()));
+    std::fs::create_dir(&directory).unwrap();
+    let fixture = Fixture(directory);
+    let path = fixture.0.join("yt-dlp.exe");
+    for corrupt in [false, true] {
+        if corrupt {
+            std::fs::write(&path, b"not an executable").unwrap();
+        }
+        let app = Application::new(SoundCloudClient::new(&path));
+        let error = app
+            .search_tracks(
+                SearchTracksRequest {
+                    query: "music".into(),
+                    limit: None,
+                },
+                &RequestOptions::default(),
+            )
+            .unwrap_err();
+        assert_eq!(error.code, ErrorCode::SourceUnavailable);
+        assert!(error.message.contains("setup-windows-runtime.ps1"));
+        assert!(!error.message.contains("fuzzy-api-damaged"));
+        assert!(!error.retryable);
+    }
+}
+
+#[test]
 fn extractor_to_application_offline() {
     let directory = std::env::temp_dir().join(format!(
         "fuzzy-api-{}-{}",

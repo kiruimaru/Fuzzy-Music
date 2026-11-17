@@ -1,5 +1,47 @@
 # AI Work Log
 
+## 2026-11-17 | Agent: OpenCode | Task: windows-alpha-distribution
+
+Preserved alpha/discovery and hidden-console changes. Inspected exact upstream
+mpv release/run: binary/debug artifacts but no complete matching transitive source
+bundle. Implemented documented digest-verified direct-upstream runtime bootstrap;
+distributed ZIP excludes those executables and includes application/locked Rust
+sources, frontend runtime sources and npm license notices. Added safe actionable
+missing/corrupt tool errors/regressions and PR/manual Windows artifact workflow.
+Native release and frontend tests/build passed; corrected Clippy test ordering.
+Packaging timed out during initial vendoring, then completed with longer timeout.
+Fresh runtime acquisition and live GUI search/Playing/Stop/exit passed, 626 console
+samples/337 active extractor samples/zero new consoles. Clean Windows and listening
+not claimed. Task file records artifact/provenance and external smoke requirement.
+User authorized branch/PR publication under Maroi9p; no release/tag authorized.
+
+## 2026-11-17 | Agent: OpenCode | Task: windows-alpha-yt-dlp-console
+
+Applied Windows-only CREATE_NO_WINDOW via the command-group builder in
+`crates/soundcloud/src/process.rs`, preserving process-job cleanup and request
+control. Extended portable UI smoke with EnumWindows observation. Locked all-target
+workspace tests: 24 passed, 2 ignored; fmt and strict Clippy passed. Native release
+and existing portable packaging passed (download retried after timeout). Real GUI
+returned ten tracks and Playing through native system proxy with packaged mpv,
+no dependency/proxy env overrides: 641 window samples, 204 active extractor samples,
+zero new visible consoles. Stop/own app cleanup passed; no listening claim and
+sampling cannot exclude between-sample flashes. ZIP/hash and remaining existing
+alpha limitations recorded in `tasks/windows-alpha.md`. Existing uncommitted alpha
+work retained; no commit, push or release.
+
+## 2026-11-17 | Agent: OpenCode | Task: windows-alpha
+
+Created separate feature worktree from merged main faa334a. Added portable
+executable-relative dependencies, digest-pinned packaging, bilingual guide and
+decision 0005. Rust 24 tests/2 ignored, frontend five tests, frontend/native
+release builds and corrected strict Clippy passed. Actual portable UI with
+different cwd and Windows-only PATH returned ten results, reached Playing via
+system proxy, Stop cleaned owned mpv and own app exited. No listening claim.
+Created Linux issue #19 assigned kiruimaru under verified Maroi9p login.
+Public readiness remains incomplete: full third-party license/source inventory,
+clean Windows/runtime verification and missing-dependency acceptance. See
+tasks/windows-alpha.md. No commit/push/PR/release/tag performed.
+
 ## 2026-11-17 | Agent: OpenCode | Task: windows-network-integration
 
 Implemented immutable native Windows manual proxy detection and shared explicit

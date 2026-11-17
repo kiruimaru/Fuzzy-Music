@@ -71,12 +71,17 @@ pub(crate) fn run(
             "Request timeout must be positive".into(),
         ));
     }
+    command
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    let mut group = command.group();
+    // command-group overwrites Command creation flags when spawning its job.
+    #[cfg(windows)]
+    group.creation_flags(0x08000000); // CREATE_NO_WINDOW
     let mut group = ProcessGroup(
-        command
-            .stdin(Stdio::null())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .group_spawn()
+        group
+            .spawn()
             .map_err(|e| SoundCloudError::Process(format!("Could not start extractor: {e}")))?,
     );
     let stdout = drain(

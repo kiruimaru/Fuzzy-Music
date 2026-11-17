@@ -56,7 +56,7 @@ impl Player {
         // command-group overwrites Command creation flags when spawning its job.
         #[cfg(windows)]
         group.creation_flags(0x08000000); // CREATE_NO_WINDOW
-        let mut child = group.spawn().map_err(|_| failure())?;
+        let mut child = group.spawn().map_err(|_| dependency_failure())?;
         let stdout = child.inner().stdout.take().expect("piped stdout");
         let (sender, ready) = mpsc::channel();
         std::thread::spawn(move || {
@@ -97,9 +97,49 @@ impl Player {
     }
 }
 
+fn dependency_failure() -> AppError {
+    AppError {
+        code: ErrorCode::PlaybackFailed,
+        message: "mpv is missing or cannot start. Run setup-windows-runtime.ps1 beside the app on Windows, or repair FUZZY_MPV. See README.md.".into(),
+        retryable: false,
+    }
+}
+
 impl Drop for Player {
     fn drop(&mut self) {
         let _ = self.child.kill();
         let _ = self.child.wait();
+    }
+}
+
+#[cfg(test)]
+mod dependency_tests {
+    use super::*;
+
+    #[test]
+    fn missing_player_reports_repair_without_private_path() {
+        let error = Player::start_with_network(
+            Path::new("nonexistent-private-directory/mpv.exe"),
+            "https://example.com/audio",
+            None,
+        )
+        .err()
+        .expect("missing executable must fail");
+        assert!(error.message.contains("setup-windows-runtime.ps1"));
+        assert!(!error.message.contains("private-directory"));
+        assert!(!error.retryable);
+    }
+
+    #[test]
+    fn corrupt_player_reports_repair() {
+        let path =
+            std::env::temp_dir().join(format!("fuzzy-corrupt-mpv-{}.exe", std::process::id()));
+        std::fs::write(&path, b"not an executable").unwrap();
+        let error = Player::start_with_network(&path, "https://example.com/audio", None)
+            .err()
+            .expect("corrupt executable must fail");
+        std::fs::remove_file(path).unwrap();
+        assert!(error.message.contains("mpv is missing or cannot start"));
+        assert!(!error.retryable);
     }
 }

@@ -1,4 +1,5 @@
 //! Synchronous application boundary. Run operations on a blocking worker, not the UI thread.
+pub use fuzzy_soundcloud::network::NetworkPolicy;
 pub use fuzzy_soundcloud::{CancellationToken, RequestOptions};
 use fuzzy_soundcloud::{SoundCloudClient, SoundCloudError};
 use serde::{Deserialize, Serialize};

@@ -1,5 +1,21 @@
 # AI Work Log
 
+## 2026-11-17 | Agent: OpenCode | Task: windows-network-integration
+
+Implemented immutable native Windows manual proxy detection and shared explicit
+child environment for yt-dlp/mpv over PR #17 in a separate local feature branch.
+Decision 0004 documents env precedence, startup refresh, bypass and PAC limits.
+23 Rust tests, strict Clippy/fmt, frontend five tests, two Chrome fixture tests,
+frontend/native debug builds passed. Native EXE with proxy env stripped detected
+current Windows manual proxy, returned ten tracks, freshly resolved and reached
+Playing; owned mpv connected to the local proxy, Stop removed it, close exited.
+No new listening claim; previous user sound confirmation is retained in context.
+The user subsequently confirmed working search and authorized separate PR publication
+under Maroi9p. No new-build listening confirmation is claimed. No global settings
+changes. Published as https://github.com/kiruimaru/Fuzzy-Music/pull/18, stacked
+on #17; review requested from kiruimaru. GitHub confirmed implementation author
+and committer as Maroi9p. Publication details are tracked in `tasks/windows-network-integration.md`.
+
 This is the concise handoff log for coding-agent sessions. It exists so a
 different agent can reconstruct the current work quickly from the repository.
 It is not a transcript.

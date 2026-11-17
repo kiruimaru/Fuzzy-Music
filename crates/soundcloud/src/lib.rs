@@ -4,6 +4,7 @@ use std::{path::PathBuf, process::Command};
 
 mod control;
 mod error;
+pub mod network;
 mod process;
 pub use control::{CancellationToken, RequestOptions};
 pub use error::SoundCloudError;
@@ -36,13 +37,20 @@ pub struct ResolvedStream {
 /// Console feasibility probe. All network/extractor work stays outside the UI.
 pub struct SoundCloudClient {
     executable: PathBuf,
+    network: Option<network::NetworkPolicy>,
 }
 
 impl SoundCloudClient {
     pub fn new(executable: impl Into<PathBuf>) -> Self {
         Self {
             executable: executable.into(),
+            network: None,
         }
+    }
+
+    pub fn with_network(mut self, network: network::NetworkPolicy) -> Self {
+        self.network = Some(network);
+        self
     }
 
     pub fn search(&self, query: &str, limit: usize) -> Result<SearchResults, SoundCloudError> {
@@ -126,6 +134,9 @@ impl SoundCloudClient {
         options: &RequestOptions,
     ) -> Result<Value, SoundCloudError> {
         let mut command = Command::new(&self.executable);
+        if let Some(network) = &self.network {
+            network.apply(&mut command);
+        }
         command.args([
             "--ignore-config",
             "--no-plugin-dirs",
@@ -153,7 +164,7 @@ impl SoundCloudClient {
                 details: String::from_utf8_lossy(&output.stderr).trim().into(),
             });
         }
-        if !output.stderr.is_empty() {
+        if self.network.is_none() && !output.stderr.is_empty() {
             eprintln!("{}", String::from_utf8_lossy(&output.stderr).trim());
         }
         serde_json::from_slice(&output.stdout).map_err(|e| {

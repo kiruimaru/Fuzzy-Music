@@ -1,7 +1,7 @@
 # Fuzzy Music Project Context
 
 **Last reviewed:** 2026-11-17  
-**Status:** source/API merged; minimal Tauri shell implemented and checked on Linux
+**Status:** source/API merged; shell PR #17 open; Windows network follow-up validated locally
 
 ## Product
 
@@ -66,7 +66,13 @@ response formats inside the source adapter.
   complete Tauri debug build passed. Live source/resolve/mpv play/Stop/replay
   passed using an existing local proxy; the real window returned ten tracks,
   reached Playing with an active audio-device stream and stopped its mpv child.
-  Human listening and Windows shell verification are not claimed.
+   Those Linux checks did not include human listening or Windows verification.
+- The Windows network follow-up snapshots native manual proxy settings for both
+  yt-dlp and mpv. Windows search returned ten results, fresh resolve reached Playing,
+  mpv connected through the configured proxy, and Stop cleaned up the child.
+  The user confirmed working search; listening was confirmed on an earlier build,
+  not repeated on this build. See `../tasks/windows-network-integration.md` and
+  decision 0004 for checks, startup restart requirements and PAC/bypass limitations.
 
 These are local checks, not CI. Linux native rendering needed
 `WEBKIT_DISABLE_DMABUF_RENDERER=1`; direct SoundCloud access timed out.
@@ -97,7 +103,7 @@ by preserving both histories. Old source branches need no separate code merge:
 their implementation is already integrated, including the later guide edits.
 Issue #14 implementation is in `feat/issue-14-tauri-shell`, with task context
 `../tasks/tauri-shell-14.md`. Next acceptance work is contributor contract review,
-Windows verification and human listening confirmation.
+review of the Windows network follow-up and release/tool packaging decisions.
 
 1. Confirm source connectivity and keep the source adapter isolated.
 2. Create the minimal Tauri application and search states.

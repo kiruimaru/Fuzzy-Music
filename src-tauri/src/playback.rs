@@ -24,8 +24,15 @@ pub struct Player {
 }
 
 impl Player {
-    pub fn start(executable: &Path, url: &str) -> Result<Self, AppError> {
+    pub fn start_with_network(
+        executable: &Path,
+        url: &str,
+        network: Option<&fuzzy_application::NetworkPolicy>,
+    ) -> Result<Self, AppError> {
         let mut command = Command::new(executable);
+        if let Some(network) = network {
+            network.apply(&mut command);
+        }
         command.args([
             "--no-config",
             "--no-video",

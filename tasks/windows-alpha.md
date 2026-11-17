@@ -85,3 +85,18 @@ Local bootstrap ZIP (before local runtime acquisition into staging):
 `artifacts/windows-alpha-final/Fuzzy Music 0.1.0-alpha.1 Windows x64.zip`.
 SHA256 `dbd49d99e19e1ddfb23001a7b527b5229005b5f1a11aa306ee90541918dbd663`.
 Staging now also has locally acquired tools; ZIP itself excludes them.
+
+## Publication
+
+Implementation commit `57efb2491c841aae1bf9b62f127e861109c3c340` pushed normally
+to `origin/feat/windows-alpha`; both local identities and GitHub API author/committer
+logins verified as Maroi9p (noreply id 134836326). PR:
+https://github.com/kiruimaru/Fuzzy-Music/pull/20 ; review requested from kiruimaru.
+Windows CI run https://github.com/kiruimaru/Fuzzy-Music/actions/runs/44081260899
+passed fmt, 27 Rust tests/2 ignored, strict Clippy, five frontend tests, native
+release build and packaging. Downloadable artifact (14-day retention):
+https://github.com/kiruimaru/Fuzzy-Music/actions/runs/44081260899/artifacts/14327467326 .
+Artifact container size 77,507,976 bytes; includes CI-built ZIP and SHA256 sidecar.
+Local ZIP size 81,459,498 bytes (different compiler build/source snapshot from CI).
+No release/tag/merge. Clean-machine GUI validation remains external; hosted CI
+build success does not establish that validation.

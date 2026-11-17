@@ -14,6 +14,11 @@ Fresh runtime acquisition and live GUI search/Playing/Stop/exit passed, 626 cons
 samples/337 active extractor samples/zero new consoles. Clean Windows and listening
 not claimed. Task file records artifact/provenance and external smoke requirement.
 User authorized branch/PR publication under Maroi9p; no release/tag authorized.
+Published implementation `57efb24` as PR #20, review requested from kiruimaru;
+local author/committer and GitHub API identities both verified Maroi9p. Windows
+Actions run 44081260899 passed all checks/build/packaging and uploaded artifact
+14327467326 (ZIP+SHA, 14 days). Publication links/size are in the task context.
+No release/tag/merge performed.
 
 ## 2026-11-17 | Agent: OpenCode | Task: windows-alpha-yt-dlp-console
 

@@ -1,6 +1,6 @@
 # 0002: Runtime-independent application boundary
 
-Date: 2026-11-17. Status: implemented for API PR, pending contributor review.
+Date: 2026-11-17. Status: reviewed and merged in PR #15; shell integration pending.
 
 Keep the existing synchronous SoundCloud adapter unchanged and introduce
 `fuzzy-application` for source-agnostic serializable DTOs and safe errors.

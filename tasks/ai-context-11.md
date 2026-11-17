@@ -1,5 +1,13 @@
 # Task: Verify AI context (#11)
 
+## Integration review update (2026-11-17)
+
+PR #13 is merged into main after Linux execution of the smoke test and Bash
+syntax checks. Main was merged into this branch without rewriting history;
+the AI log conflict was resolved by retaining both branches' entries.
+The publication-only instructions below describe the earlier task.
+See `tasks/pr-integration-review.md` for the combined review.
+
 ## Scope and progress
 
 - Read AGENTS, README, project context, contracts, decision 0001 and AI log.

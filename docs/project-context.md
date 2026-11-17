@@ -1,7 +1,7 @@
 # Fuzzy Music Project Context
 
 **Last reviewed:** 2026-11-17  
-**Status:** typed application API prepared for review; application shell pending
+**Status:** source, application API, and context checks merged; shell pending
 
 ## Product
 
@@ -52,10 +52,11 @@ response formats inside the source adapter.
 - The repository and local Rust environment were prepared.
 - `crates/application` adds synchronous typed search/resolve DTOs, safe errors,
   and explicit request control without a Tauri/runtime dependency. See decision
-  0002 and `tasks/application-api.md`; policies await contributor review.
+  0002 and `tasks/application-api.md`. PR #15 is merged; both module owners
+  should confirm shell integration policies before wiring IPC.
 - `crates/soundcloud` contains the standalone Rust search and stream probe,
   including request timeout, cancellation, and process-group cleanup.
-- On Windows, `cargo test --workspace --all-targets --locked` passed 14 tests,
+- On Windows and Linux, `cargo test --workspace --all-targets --locked` passed 14 tests,
   including the offline extractor-to-application test; the child-process
   fixture is intentionally ignored during normal discovery.
 - Strict Clippy and rustfmt checks passed for the integrated workspace.
@@ -63,9 +64,9 @@ response formats inside the source adapter.
   repository.
 
 These are local automated checks, not CI or fresh live SoundCloud evidence.
-Historical live results are described in PR #1; live search/resolve and Linux
-execution were not repeated during integration. See
-[`../tasks/soundcloud-main-integration.md`](../tasks/soundcloud-main-integration.md).
+CI workflows are not configured. Historical live results are described in
+PR #1; live search/resolve and audio were not repeated during this review.
+See [`../tasks/pr-integration-review.md`](../tasks/pr-integration-review.md).
 
 ## Agreed work split
 
@@ -84,12 +85,12 @@ stale-response guards and cancellation IPC remain shell integration work.
 
 ## Delivery order
 
-Publication handoff for [#14](https://github.com/kiruimaru/Fuzzy-Music/issues/14):
-API branch `feat/application-api` is stacked on open PR #12's
-`feat/soundcloud-main-integration`. Merge #12 first, retarget the API PR to main,
-review/recheck it, then merge the API before shell integration. PR #13 is
-independent. See `../tasks/application-api.md` for concrete shell owner steps;
-issue #14 links the published API PR. No Tauri or mpv implementation is included.
+PR #12 (source), PR #15 (application API, retargeted to main), and PR #13
+(context checks) are merged into main. The journal conflict in #13 was resolved
+by preserving both histories. Old source branches need no separate code merge:
+their implementation is already integrated, including the later guide edits.
+Continue [#14](https://github.com/kiruimaru/Fuzzy-Music/issues/14) using
+`../tasks/application-api.md`. No Tauri or mpv implementation is included.
 
 1. Confirm source connectivity and keep the source adapter isolated.
 2. Create the minimal Tauri application and search states.

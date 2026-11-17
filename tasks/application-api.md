@@ -1,5 +1,15 @@
 # Task: Typed application API
 
+## Integration review update (2026-11-17)
+
+PR #12 was merged, PR #15 was retargeted to main and merged after review,
+and independent PR #13 was merged with its journal conflict resolved.
+The publication instructions below describe the earlier handoff, not pending
+merge work. Linux all-targets tests passed (14 passed, one ignored child
+fixture); strict Clippy and rustfmt passed. Continue shell issue #14 using the
+checklist below. No Tauri, mpv, fresh live source, or audio checks are claimed.
+See `tasks/pr-integration-review.md` for the complete integration review.
+
 ## Goal and scope
 
 Prepare a minimal runtime-independent search/resolve boundary for later Tauri

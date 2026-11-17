@@ -36,7 +36,10 @@ first release:
 SoundCloud-specific code is isolated in `crates/soundcloud`. The planned
 frontend/Rust boundary uses explicit, source-agnostic contracts in
 [`docs/architecture/contracts.md`](docs/architecture/contracts.md); prototype
-types are not yet that boundary. Team responsibilities are recorded in
+types are not that boundary. `crates/application` implements typed search/resolve
+DTOs and safe errors without Tauri. See the contracts for worker/cancellation
+integration and the compilable `crates/application/examples/search.rs` example.
+Team responsibilities are recorded in
 [`docs/team.md`](docs/team.md).
 
 ## Quick start on Windows x64

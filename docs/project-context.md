@@ -1,7 +1,7 @@
 # Fuzzy Music Project Context
 
 **Last reviewed:** 2026-11-17  
-**Status:** standalone SoundCloud prototype integrated; application shell pending
+**Status:** typed application API prepared for review; application shell pending
 
 ## Product
 
@@ -48,10 +48,14 @@ response formats inside the source adapter.
 ## Known state
 
 - The repository and local Rust environment were prepared.
+- `crates/application` adds synchronous typed search/resolve DTOs, safe errors,
+  and explicit request control without a Tauri/runtime dependency. See decision
+  0002 and `tasks/application-api.md`; policies await contributor review.
 - `crates/soundcloud` contains the standalone Rust search and stream probe,
   including request timeout, cancellation, and process-group cleanup.
-- On Windows, `cargo test --workspace --locked` passed eight tests; the
-  child-process fixture is intentionally ignored during normal discovery.
+- On Windows, `cargo test --workspace --all-targets --locked` passed 14 tests,
+  including the offline extractor-to-application test; the child-process
+  fixture is intentionally ignored during normal discovery.
 - Strict Clippy and rustfmt checks passed for the integrated workspace.
 - Playback integration and the Tauri shell have not yet been added to this
   repository.
@@ -72,9 +76,18 @@ TypeScript interface, mpv integration, and build preparation.
 Before connecting the modules, both owners must agree on the contracts in
 [`architecture/contracts.md`](architecture/contracts.md).
 The prototype's Rust types are internal source-adapter contracts, not Tauri
-DTOs. Contract mapping and safe error translation remain a separate joint task.
+DTOs. Mapping and safe errors now live in `crates/application`; review the new
+contract policies together before connecting Tauri. Worker dispatch, local
+stale-response guards and cancellation IPC remain shell integration work.
 
 ## Delivery order
+
+Publication handoff for [#14](https://github.com/kiruimaru/Fuzzy-Music/issues/14):
+API branch `feat/application-api` is stacked on open PR #12's
+`feat/soundcloud-main-integration`. Merge #12 first, retarget the API PR to main,
+review/recheck it, then merge the API before shell integration. PR #13 is
+independent. See `../tasks/application-api.md` for concrete shell owner steps;
+issue #14 links the published API PR. No Tauri or mpv implementation is included.
 
 1. Confirm source connectivity and keep the source adapter isolated.
 2. Create the minimal Tauri application and search states.

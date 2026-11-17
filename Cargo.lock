@@ -25,6 +25,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "fuzzy-application"
+version = "0.1.0"
+dependencies = [
+ "fuzzy-soundcloud",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "fuzzy-soundcloud"
 version = "0.1.0"
 dependencies = [

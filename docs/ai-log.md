@@ -48,6 +48,87 @@ Copy this block for a new entry and place newest entries at the top.
 <the next concrete step>
 ```
 
+## 2026-11-17 | Agent: OpenCode | Task: application-api-publication
+
+### Goal
+
+Publish the application boundary and actionable handoff for issue #14.
+
+### Changed
+
+- Reviewed DTO serialization, duration extremes, safe errors, blocking usage,
+  cancellation and source mapping; added fractional/negative/oversized input
+  serialization checks and rounding edge assertions. No source API change.
+- Updated task, contracts, decision and project context with shell owner steps.
+- Selected stacked base `feat/soundcloud-main-integration`: PR #12 remains open;
+  PR #13 is independent and its separate worktree is untouched.
+
+### Checks
+
+- `cargo fmt --all --check`: pass.
+- `cargo test --workspace --all-targets --locked`: pass, 14 passed, 1 ignored.
+- `cargo test --workspace --all-targets --locked --offline`: same result.
+- `cargo clippy --workspace --all-targets --locked -- -D warnings`: pass.
+- `cargo check -p fuzzy-application --example search --locked`: pass.
+- `git diff --check`: pass; only local line-ending warnings.
+- Live SoundCloud, Linux, Tauri and audio: not run.
+
+### Decisions
+
+- Publish with contributor review, no merging or history rewriting. Merge #12
+  first, retarget API to main and recheck; shell implementation follows separately.
+
+### Open questions
+
+- Both owners must review contract policies; shell IPC, mpv and packaging remain.
+
+### Next action
+
+Commit/push the reviewed files, open the stacked API PR, request `kiruimaru`,
+and link it from #14 while preserving the shell requirements. The issue is the
+publication entry point; no API approval or live playback is claimed.
+
+## 2026-11-17 | Agent: OpenCode | Task: application-api
+
+### Goal
+
+Prepare a typed, runtime-independent boundary for future Tauri integration.
+
+### Changed
+
+- `crates/application`: search/resolve DTOs, metadata mapping, safe AppError,
+  explicit request options, offline unit and extractor-to-application tests.
+- Added a compilable worker example without pretending to supply a Tauri bridge.
+- Updated README, contracts, project context and `tasks/application-api.md`.
+- Decision 0002 records new policies, including sourceUrl and separate temporary
+  stream resolution; these require contributor review, not prior agreement.
+- Created local `feat/application-api` from clean integration HEAD 12c21c1.
+  GitHub PR #12 remains open. No commit, push, PR or merge performed.
+
+### Checks
+
+- `cargo test --workspace --all-targets --locked`: pass, 14 passed, 1 ignored.
+- `cargo clippy --workspace --all-targets --locked -- -D warnings`: pass.
+- `cargo fmt --all --check`: pass.
+- `cargo check -p fuzzy-application --example search --locked`: pass.
+- `git diff --check`: pass (Git emits local line-ending conversion warnings).
+- Live source, Linux, Tauri and playback: not run.
+
+### Decisions
+
+- Preserve internal SoundCloud API and control behavior; no runtime dependencies.
+- Keep stale-response generations local to shell owners; document blocking-worker
+  dispatch and per-operation cancellation instead of adding global state.
+
+### Open questions
+
+- Contributor review of boundary policies and future shell IPC/packaging details.
+
+### Next action
+
+Review local changes; connect actual shell worker dispatch, cancellation IPC and
+generation guards separately. Publishing requires new explicit permission.
+
 ## 2026-11-17 | Agent: OpenCode | Task: soundcloud-main-integration
 
 ### Goal

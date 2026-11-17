@@ -1,7 +1,7 @@
 # Fuzzy Music Project Context
 
 **Last reviewed:** 2026-11-17  
-**Status:** project foundation
+**Status:** standalone SoundCloud prototype integrated; application shell pending
 
 ## Product
 
@@ -48,14 +48,18 @@ response formats inside the source adapter.
 ## Known state
 
 - The repository and local Rust environment were prepared.
-- A Windows Rust prototype reportedly completed SoundCloud search, stream
-  discovery, timeout handling, and cancellation checks.
-- The reported prototype suite had eight passing automated tests.
+- `crates/soundcloud` contains the standalone Rust search and stream probe,
+  including request timeout, cancellation, and process-group cleanup.
+- On Windows, `cargo test --workspace --locked` passed eight tests; the
+  child-process fixture is intentionally ignored during normal discovery.
+- Strict Clippy and rustfmt checks passed for the integrated workspace.
 - Playback integration and the Tauri shell have not yet been added to this
   repository.
 
-These prototype results are historical project input. They must be re-run or
-ported into this repository before being treated as CI evidence.
+These are local automated checks, not CI or fresh live SoundCloud evidence.
+Historical live results are described in PR #1; live search/resolve and Linux
+execution were not repeated during integration. See
+[`../tasks/soundcloud-main-integration.md`](../tasks/soundcloud-main-integration.md).
 
 ## Agreed work split
 
@@ -67,6 +71,8 @@ TypeScript interface, mpv integration, and build preparation.
 
 Before connecting the modules, both owners must agree on the contracts in
 [`architecture/contracts.md`](architecture/contracts.md).
+The prototype's Rust types are internal source-adapter contracts, not Tauri
+DTOs. Contract mapping and safe error translation remain a separate joint task.
 
 ## Delivery order
 

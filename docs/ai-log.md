@@ -48,6 +48,46 @@ Copy this block for a new entry and place newest entries at the top.
 <the next concrete step>
 ```
 
+## 2026-11-17 | Agent: OpenCode | Task: soundcloud-main-integration
+
+### Goal
+
+Integrate the SoundCloud prototype with current main and deliver a separate PR
+continuing #1 without modifying the original branch.
+
+### Changed
+
+- Merged the feature history into `feat/soundcloud-main-integration` from main.
+- Resolved the README conflict, preserving foundation guidance and probe usage.
+- Preserved Rust implementation, setup scripts, SoundCloud guide, and team docs.
+- Updated project context and documented prototype/DTO gaps in the contracts.
+- Added `tasks/soundcloud-main-integration.md` with verification and handoff.
+
+### Checks
+
+- `cargo test --workspace --locked`: pass - 8 passed, 1 ignored child fixture.
+- `cargo clippy --workspace --all-targets --locked -- -D warnings`: pass.
+- `cargo fmt --all --check`: pass.
+- Live SoundCloud requests, tool download, Linux, playback, UI: not run.
+
+### Decisions
+
+- Preserve source history and public API; no Rust fixes were needed for this
+  integration. Use a new PR continuing #1; leave #1 open and do not merge main.
+- Defer DTO mapping and safe error translation to agreement between owners.
+
+### Open questions
+
+- Missing author, duration conversion, pagination, stream mapping, and safe
+  errors must be agreed before connecting the adapter to Tauri.
+
+### Next action
+
+Branch pushed; [PR #12](https://github.com/kiruimaru/Fuzzy-Music/pull/12)
+created with review requested from `kiruimaru`. Integration commit: `02628f4`.
+Await review, then agree boundary mapping as the next implementation stage.
+PR #1 remains open; main was not changed.
+
 ## 2026-11-17 | Agent: Codex | Task: agent-context-and-ai-log
 
 ### Goal

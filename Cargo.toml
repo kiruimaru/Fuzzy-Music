@@ -1,0 +1,3 @@
+[workspace]
+members = ["crates/soundcloud"]
+resolver = "3"

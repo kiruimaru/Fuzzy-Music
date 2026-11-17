@@ -4,6 +4,11 @@ import { api, safeMessage, type Track } from "./api";
 // Keep new webview sessions newer than requests retained by the Rust process.
 const generationBase = Date.now() * 1000;
 
+function time(milliseconds: number) {
+  const seconds = Math.floor(milliseconds / 1000);
+  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
+}
+
 export function App() {
   const [query, setQuery] = useState("");
   const [tracks, setTracks] = useState<Track[]>([]);
@@ -15,6 +20,14 @@ export function App() {
   const searchGeneration = useRef(generationBase);
   const playbackGeneration = useRef(generationBase);
   const resolving = useRef(false);
+  const [position, setPosition] = useState(0);
+  const [duration, setDuration] = useState<number | null>(null);
+  const [volume, setVolume] = useState(100);
+  const [seekable, setSeekable] = useState(false);
+  const [seekDraft, setSeekDraft] = useState<number | null>(null);
+  const [volumeDraft, setVolumeDraft] = useState<number | null>(null);
+  const [controlling, setControlling] = useState(false);
+  const active = playback === "playing" || playback === "paused";
 
   useEffect(() => {
     let disposed = false;
@@ -28,6 +41,10 @@ export function App() {
         if (!disposed && generation === playbackGeneration.current &&
             status.generation === generation && !resolving.current) {
           setPlayback(status.state === "loading" ? "starting" : status.state);
+          setPosition(status.positionMs ?? 0);
+          setDuration(status.durationMs ?? null);
+          setVolume(status.volume ?? 100);
+          setSeekable(status.seekable ?? false);
           setPlayError(status.state === "error" ? status.error ?? "Playback failed. Please retry." : "");
         }
       } catch {
@@ -84,6 +101,10 @@ export function App() {
     setSelected(track);
     setPlayback("resolving");
     setPlayError("");
+    setPosition(0);
+    setDuration(null);
+    setSeekDraft(null);
+    setVolumeDraft(null);
     try {
       await api.play(generation, track);
       if (generation === playbackGeneration.current) setPlayback("starting");
@@ -109,6 +130,18 @@ export function App() {
       setPlayback("error");
       setPlayError(safeMessage(error));
     }
+  }
+
+  async function control(operation: (generation: number) => Promise<void>) {
+    const generation = playbackGeneration.current;
+    setControlling(true);
+    setPlayError("");
+    setSeekDraft(null);
+    setVolumeDraft(null);
+    try { await operation(generation); }
+    catch (error) {
+      if (generation === playbackGeneration.current) setPlayError(safeMessage(error));
+    } finally { setControlling(false); }
   }
 
   return <main>
@@ -137,12 +170,40 @@ export function App() {
         {playback === "resolving" ? "Resolving..." :
          playback === "starting" ? "Starting audio..." :
          playback === "playing" ? "Playing" :
+         playback === "paused" ? "Paused" :
          playback === "stopping" ? "Stopping..." :
          playback === "stopped" ? "Stopped" :
          playback === "error" ? playError : "Idle"}
       </p>
-      <button onClick={() => void stop()} disabled={playback === "stopping"}>Stop</button>
-      {selected && <button onClick={() => void play(selected)}>Play again</button>}
+      <div className="transport">
+        <button className="primary" disabled={!active || controlling} onClick={() => void control(generation => api.pause(generation, playback !== "paused"))}>
+          {playback === "paused" ? "Resume" : "Pause"}
+        </button>
+        <button onClick={() => void stop()} disabled={playback === "stopping"}>Stop</button>
+        {selected && <button onClick={() => void play(selected)}>Play again</button>}
+      </div>
+      <div className="timeline">
+        <label htmlFor="position">Position</label>
+        <input id="position" type="range" min="0" max={duration ?? 1} step="1000"
+          value={seekDraft ?? Math.min(position, duration ?? 0)} disabled={!active || !seekable || !duration}
+          onChange={event => setSeekDraft(Number(event.target.value))}
+          onPointerCancel={() => setSeekDraft(null)}
+          onBlur={() => setSeekDraft(null)}
+          onPointerUp={event => { if (!active || !seekable || !duration) return; const value = Number(event.currentTarget.value); setSeekDraft(null); void control(generation => api.seek(generation, value)); }}
+          onKeyUp={event => { if (["ArrowLeft", "ArrowRight", "Home", "End", "PageUp", "PageDown"].includes(event.key)) { const value = Number(event.currentTarget.value); setSeekDraft(null); void control(generation => api.seek(generation, value)); } }} />
+        <output>{time(seekDraft ?? position)} / {duration === null ? "--:--" : time(duration)}</output>
+      </div>
+      <div className="volume">
+        <label htmlFor="volume">Volume</label>
+        <input id="volume" type="range" min="0" max="100" step="1" value={volumeDraft ?? volume} disabled={!active}
+          onChange={event => setVolumeDraft(Number(event.target.value))}
+          onPointerCancel={() => setVolumeDraft(null)}
+          onBlur={() => setVolumeDraft(null)}
+          onPointerUp={event => { if (!active) return; const value = Number(event.currentTarget.value); setVolumeDraft(null); void control(generation => api.volume(generation, value)); }}
+          onKeyUp={event => { if (["ArrowLeft", "ArrowRight", "Home", "End", "PageUp", "PageDown"].includes(event.key)) { const value = Number(event.currentTarget.value); setVolumeDraft(null); void control(generation => api.volume(generation, value)); } }} />
+        <output>{Math.round(volumeDraft ?? volume)}%</output>
+      </div>
+      {playError && playback !== "error" && <p role="alert">{playError}</p>}
     </section>
     <ul aria-label="Search results">
       {tracks.map(track => <li key={track.id}>

@@ -1,19 +1,35 @@
-:root { font-family: system-ui, sans-serif; color: #181818; background: #fff; font-size: 16px; }
+:root { font-family: system-ui, sans-serif; color: #e9edf5; background: #10141e; font-size: 16px; color-scheme: dark; }
 * { box-sizing: border-box; }
 body { margin: 0; }
-main { max-width: 760px; margin: auto; padding: 24px; }
+main { max-width: 860px; margin: auto; padding: 32px 24px; }
 h1 { font-size: 24px; margin: 0 0 24px; }
 label { display: block; margin-bottom: 8px; }
 input, button { font: inherit; min-height: 36px; }
 button { cursor: pointer; }
+button, input:not([type="range"]) { border: 1px solid #414b62; border-radius: 8px; background: #20283a; color: inherit; padding: 8px 14px; }
+button:hover:not(:disabled) { background: #344362; }
+button:focus-visible, input:focus-visible { outline: 2px solid #9caeff; outline-offset: 3px; }
+button:disabled { opacity: .45; }
+input[type="range"] { accent-color: #a6b4ff; padding: 0; width: 100%; }
 button:disabled { cursor: default; }
 .search { display: flex; gap: 8px; flex-wrap: wrap; }
 input { min-width: 0; flex: 1 1 180px; }
 ul { list-style: none; padding: 0; }
-li { display: flex; align-items: center; gap: 16px; padding: 12px 0; border-top: 1px solid #ddd; }
+li { display: flex; align-items: center; gap: 16px; padding: 16px 0; border-top: 1px solid #30394c; }
 li div { flex: 1; min-width: 0; }
 strong, span { display: block; overflow-wrap: anywhere; }
-span { color: #555; margin-top: 4px; }
-.playback { border-top: 1px solid #aaa; margin-top: 24px; padding-top: 8px; }
+span { color: #aab5cc; margin-top: 4px; }
+.playback { border: 1px solid #3d4961; background: #1b2231; border-radius: 16px; margin-top: 24px; padding: 20px; }
 .playback p { overflow-wrap: anywhere; }
 .playback button { margin-right: 8px; }
+.transport { display: flex; flex-wrap: wrap; gap: 8px; margin: 20px 0; }
+.transport .primary { background: #a6b4ff; color: #10141e; font-weight: 650; min-width: 100px; }
+.timeline, .volume { display: grid; grid-template-columns: 70px minmax(0, 1fr) 110px; align-items: center; gap: 12px; margin-top: 12px; }
+.timeline label, .volume label { margin: 0; }
+output { font-variant-numeric: tabular-nums; text-align: right; font-size: 14px; }
+@media (max-width: 480px) {
+  main { padding: 20px 12px; }
+  .playback { padding: 14px; }
+  .timeline, .volume { grid-template-columns: minmax(0, 1fr) 100px; gap: 6px; }
+  .timeline input, .volume input { grid-column: 1 / -1; grid-row: 2; }
+}

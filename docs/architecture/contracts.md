@@ -138,6 +138,27 @@ to #14, not the full future PlaybackSnapshot below.
 
 ## Playback
 
+Local controls follow decision 0005 (supersedes the Play/Stop-only limitation
+of decision 0003). `playback_status` additionally returns `positionMs: number`,
+`durationMs: number | null`, `volume: number` (0..100), `seekable: boolean`, and
+supports `state: "paused"`. `generation` remains part of the status.
+
+```ts
+update_playback({ generation, action:
+  | { type: "pause"; paused: boolean }
+  | { type: "seek"; position_ms: number }
+  | { type: "volume"; volume: number }
+}): Promise<void>
+```
+
+Controls use the current playback generation without creating a new intent.
+Stale generations are rejected. Pause/resume preserve the player and stream.
+Seek requires known duration and seekability; position is clamped to duration.
+The action's `position_ms` field is explicitly snake_case on this IPC command;
+status fields remain camelCase. Successful command submission is not an
+optimistic state change: observed mpv properties drive the next snapshot.
+Volume is not persisted and currently resets to 100 on a new Play.
+
 ```ts
 type PlaybackState =
   | "idle"

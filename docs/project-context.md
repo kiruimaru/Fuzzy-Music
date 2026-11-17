@@ -47,6 +47,11 @@ response formats inside the source adapter.
 
 ## Known state
 
+- Local branch `feat/playback-controls` adds a basic dark player panel and mpv
+  JSON IPC pause/resume, seek and volume; see `../tasks/playback-controls.md`
+  and decision 0005. Queue and persisted settings remain unimplemented. This
+  work is not published and does not close issue #22.
+
 - AI context assembly has offline regression coverage in
   `scripts/test-ai-context.sh`; see `tasks/ai-context-11.md` for scope and limits.
 - The repository and local Rust environment were prepared.

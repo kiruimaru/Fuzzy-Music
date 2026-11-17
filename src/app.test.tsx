@@ -10,6 +10,8 @@ vi.mock("./api", async (original) => ({
     search: vi.fn(), cancelSearch: vi.fn().mockResolvedValue(undefined),
     play: vi.fn(), stop: vi.fn().mockResolvedValue(undefined),
     status: vi.fn().mockResolvedValue({ generation: 0, state: "idle" }),
+    pause: vi.fn().mockResolvedValue(undefined), seek: vi.fn().mockResolvedValue(undefined),
+    volume: vi.fn().mockResolvedValue(undefined),
   },
 }));
 
@@ -93,4 +95,36 @@ test("Stop during resolve ignores late completion and Play can retry", async () 
 test("errors never echo arbitrary IPC diagnostics", () => {
   expect(safeMessage("token=SECRET")).not.toContain("SECRET");
   expect(safeMessage({ code: "playback_failed", message: "SECRET" })).not.toContain("SECRET");
+});
+
+test("controls use the active playback generation without replaying the track", async () => {
+  vi.mocked(api.search).mockResolvedValue({ tracks: [track], nextPageToken: null });
+  vi.mocked(api.play).mockResolvedValue(undefined);
+  let paused = false;
+  vi.mocked(api.status).mockImplementation(async () => ({
+    generation: vi.mocked(api.play).mock.calls.at(-1)?.[0] ?? 0,
+    state: paused ? "paused" : "playing", trackId: "1", error: null,
+    positionMs: 15000, durationMs: 180000, volume: 60, seekable: true,
+  }));
+  vi.mocked(api.pause).mockImplementation(async (_generation, value) => { paused = value; });
+  render(<App />);
+  search("music");
+  fireEvent.click(await screen.findByRole("button", { name: "Play Example" }));
+  await screen.findByText("Playing");
+  const generation = vi.mocked(api.play).mock.calls.at(-1)![0];
+  fireEvent.click(screen.getByRole("button", { name: "Pause" }));
+  await screen.findByText("Paused");
+  fireEvent.click(screen.getByRole("button", { name: "Resume" }));
+  await screen.findByText("Playing");
+  const position = screen.getByLabelText("Position");
+  fireEvent.change(position, { target: { value: "45000" } });
+  fireEvent.pointerUp(position);
+  await waitFor(() => expect(api.seek).toHaveBeenCalledWith(generation, 45000));
+  const volume = screen.getByLabelText("Volume");
+  fireEvent.change(volume, { target: { value: "25" } });
+  fireEvent.keyUp(volume, { key: "ArrowLeft" });
+  await waitFor(() => expect(api.volume).toHaveBeenCalledWith(generation, 25));
+  expect(api.pause).toHaveBeenNthCalledWith(1, generation, true);
+  expect(api.pause).toHaveBeenNthCalledWith(2, generation, false);
+  expect(api.play).toHaveBeenCalledTimes(1);
 });

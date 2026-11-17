@@ -13,8 +13,12 @@ export type Track = {
 
 export type PlaybackStatus = {
   generation: number;
-  state: "idle" | "loading" | "playing" | "stopped" | "error";
+  state: "idle" | "loading" | "playing" | "paused" | "stopped" | "error";
   trackId: string | null;
+  positionMs: number;
+  durationMs: number | null;
+  volume: number;
+  seekable: boolean;
   error: string | null;
 };
 
@@ -30,6 +34,9 @@ export const api = {
     }),
   stop: (generation: number) => invoke<void>("stop_playback", { generation }),
   status: () => invoke<PlaybackStatus>("playback_status"),
+  pause: (generation: number, paused: boolean) => invoke<void>("update_playback", { generation, action: { type: "pause", paused } }),
+  seek: (generation: number, positionMs: number) => invoke<void>("update_playback", { generation, action: { type: "seek", position_ms: positionMs } }),
+  volume: (generation: number, volume: number) => invoke<void>("update_playback", { generation, action: { type: "volume", volume } }),
 };
 
 export function safeMessage(error: unknown): string {

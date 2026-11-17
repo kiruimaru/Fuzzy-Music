@@ -59,6 +59,10 @@ struct PlaybackStatus {
     generation: u64,
     state: &'static str,
     track_id: Option<String>,
+    position_ms: u64,
+    duration_ms: Option<u64>,
+    volume: f64,
+    seekable: bool,
     error: Option<String>,
 }
 
@@ -68,6 +72,10 @@ impl Default for PlaybackStatus {
             generation: 0,
             state: "idle",
             track_id: None,
+            position_ms: 0,
+            duration_ms: None,
+            volume: 100.0,
+            seekable: false,
             error: None,
         }
     }
@@ -217,9 +225,13 @@ impl Shell {
         if let Some(player) = &mut control.player {
             let result = player.poll();
             match result {
-                Ok(state) => {
-                    control.status.state = state;
-                    if state == "stopped" {
+                Ok(snapshot) => {
+                    control.status.state = snapshot.state;
+                    control.status.position_ms = snapshot.position_ms;
+                    control.status.duration_ms = snapshot.duration_ms;
+                    control.status.volume = snapshot.volume;
+                    control.status.seekable = snapshot.seekable;
+                    if snapshot.state == "stopped" {
                         control.player = None;
                     }
                 }
@@ -313,6 +325,48 @@ async fn playback_status(shell: tauri::State<'_, Arc<Shell>>) -> Result<Playback
     worker(move || shell.status()).await
 }
 
+#[derive(serde::Deserialize)]
+#[serde(tag = "type", rename_all = "camelCase")]
+enum PlaybackAction {
+    Pause { paused: bool },
+    Seek { position_ms: u64 },
+    Volume { volume: f64 },
+}
+
+impl Shell {
+    fn update_playback(&self, generation: u64, action: PlaybackAction) -> Result<(), AppError> {
+        let mut control = self.control.lock().map_err(|_| internal())?;
+        if control.closed || !control.playback.current(generation) {
+            return Err(cancelled());
+        }
+        let player = control.player.as_mut().ok_or_else(playback::failure)?;
+        match action {
+            PlaybackAction::Pause { paused } => player.pause(paused),
+            PlaybackAction::Seek { position_ms } => player.seek(position_ms),
+            PlaybackAction::Volume { volume } => {
+                if !volume.is_finite() || !(0.0..=100.0).contains(&volume) {
+                    return Err(AppError {
+                        code: ErrorCode::InvalidInput,
+                        message: "Volume must be between 0 and 100.".into(),
+                        retryable: false,
+                    });
+                }
+                player.volume(volume)
+            }
+        }
+    }
+}
+
+#[tauri::command]
+async fn update_playback(
+    shell: tauri::State<'_, Arc<Shell>>,
+    generation: u64,
+    action: PlaybackAction,
+) -> Result<(), AppError> {
+    let shell = shell.inner().clone();
+    worker(move || shell.update_playback(generation, action)).await
+}
+
 pub fn run() {
     tauri::Builder::default()
         .manage(Arc::new(Shell::new()))
@@ -321,7 +375,8 @@ pub fn run() {
             cancel_search,
             play_track,
             stop_playback,
-            playback_status
+            playback_status,
+            update_playback
         ])
         .on_window_event(|window, event| {
             if matches!(event, tauri::WindowEvent::CloseRequested { .. }) {
@@ -527,7 +582,7 @@ mod tests {
         Arc::get_mut(&mut shell).unwrap().mpv = fixture
             .0
             .join(format!("tool{}", std::env::consts::EXE_SUFFIX));
-        shell.play(3, request("unplayable")).unwrap();
+        assert!(shell.play(3, request("unplayable")).is_err());
         let start = Instant::now();
         while shell.status().unwrap().state != "error" {
             assert!(start.elapsed() < Duration::from_secs(3));
@@ -535,6 +590,68 @@ mod tests {
         }
         assert!(shell.control.lock().unwrap().player.is_none());
         shell.play(4, request("ok")).unwrap();
+        shell.shutdown();
+    }
+
+    #[test]
+    fn controls_preserve_player_and_reject_stale_generations() {
+        let fixture = Fixture::new();
+        let shell = fixture.shell();
+        shell.play(1, request("ok")).unwrap();
+        let wait = |state: &str, position: u64, volume: f64| {
+            let start = Instant::now();
+            loop {
+                let status = shell.status().unwrap();
+                if status.state == state
+                    && status.position_ms == position
+                    && status.volume == volume
+                {
+                    break;
+                }
+                assert!(start.elapsed() < Duration::from_secs(3));
+                std::thread::sleep(Duration::from_millis(10));
+            }
+        };
+        wait("playing", 0, 100.0);
+        shell
+            .update_playback(1, PlaybackAction::Pause { paused: true })
+            .unwrap();
+        wait("paused", 0, 100.0);
+        shell
+            .update_playback(1, PlaybackAction::Seek { position_ms: 45000 })
+            .unwrap();
+        wait("paused", 45000, 100.0);
+        shell
+            .update_playback(1, PlaybackAction::Volume { volume: 30.0 })
+            .unwrap();
+        wait("paused", 45000, 30.0);
+        shell
+            .update_playback(1, PlaybackAction::Pause { paused: false })
+            .unwrap();
+        wait("playing", 45000, 30.0);
+        assert_eq!(
+            shell
+                .update_playback(1, PlaybackAction::Volume { volume: 101.0 })
+                .unwrap_err()
+                .code,
+            ErrorCode::InvalidInput
+        );
+        assert_eq!(
+            shell
+                .update_playback(0, PlaybackAction::Pause { paused: true })
+                .unwrap_err()
+                .code,
+            ErrorCode::Cancelled
+        );
+        shell.control.lock().unwrap().stop(2).unwrap();
+        assert_eq!(
+            shell
+                .update_playback(1, PlaybackAction::Pause { paused: false })
+                .unwrap_err()
+                .code,
+            ErrorCode::Cancelled
+        );
+        assert!(shell.control.lock().unwrap().player.is_none());
         shell.shutdown();
     }
 

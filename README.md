@@ -8,6 +8,11 @@ The repository includes a Rust SoundCloud adapter, a typed application API,
 and a minimal Tauri 2 + React/TypeScript shell for search, Play and Stop through
 mpv. See [desktop setup and verification](docs/shell-development.md).
 
+The local playback-controls branch extends the panel with pause/resume,
+position/seek and volume through mpv JSON IPC. See
+[`tasks/playback-controls.md`](tasks/playback-controls.md) for verification and
+remaining limitations. Queue and persistence are not implemented in this slice.
+
 ## Project goals
 
 - Search by track title and author.

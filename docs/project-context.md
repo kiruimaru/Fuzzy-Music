@@ -47,6 +47,8 @@ response formats inside the source adapter.
 
 ## Known state
 
+- AI context assembly has offline regression coverage in
+  `scripts/test-ai-context.sh`; see `tasks/ai-context-11.md` for scope and limits.
 - The repository and local Rust environment were prepared.
 - `crates/application` adds synchronous typed search/resolve DTOs, safe errors,
   and explicit request control without a Tauri/runtime dependency. See decision

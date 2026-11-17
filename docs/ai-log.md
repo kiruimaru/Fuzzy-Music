@@ -48,6 +48,38 @@ Copy this block for a new entry and place newest entries at the top.
 <the next concrete step>
 ```
 
+## 2026-11-17 | Agent: OpenCode | Task: #11
+
+### Goal
+
+Verify the AI context shipped in main without publishing unrelated local work.
+
+### Changed
+
+- Added `scripts/test-ai-context.sh` with disposable offline fixtures.
+- Recorded coverage and assignment blockers in `tasks/ai-context-11.md`.
+
+### Checks
+
+- `bash scripts/test-ai-context.sh`: pass on Windows Git Bash.
+- `bash -n scripts/ai-context.sh scripts/test-ai-context.sh`: pass.
+- Preserved application workspace: offline all-targets tests pass (14 passed,
+  one ignored fixture); rustfmt and strict offline Clippy pass. These checks
+  concern the separate local worktree, not the main-branch PR contents.
+- No AI provider, live source, playback or Linux execution claimed.
+
+### Decisions
+
+- Use an isolated worktree from main; preserve uncommitted application API work.
+
+### Open questions
+
+- #9 needs a third closed PR and real meeting agreements; #7 needs scope criteria.
+
+### Next action
+
+Publish #11 verification for kiruimaru review without merging.
+
 ## 2026-11-17 | Agent: OpenCode | Task: application-api-publication
 
 ### Goal

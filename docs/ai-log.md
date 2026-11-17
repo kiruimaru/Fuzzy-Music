@@ -48,6 +48,41 @@ Copy this block for a new entry and place newest entries at the top.
 <the next concrete step>
 ```
 
+## 2026-11-17 | Agent: Codex | Task: pr-integration-review
+
+### Goal
+
+Review branch changes, merge ready PRs, and assess repository structure.
+
+### Changed
+
+- Merged #12, retargeted and merged #15, then merged #13 after preserving
+  both sets of journal entries in its only conflict.
+- Reviewed all remote branch histories; old source branches need no extra merge.
+- Updated README layout, project context, contract status, and task handoffs.
+- Recorded review scope and remaining work in `tasks/pr-integration-review.md`.
+
+### Checks
+
+- Linux all-targets locked Rust tests: pass, 14 passed, one child fixture ignored.
+- Strict offline Clippy, rustfmt, Bash syntax, and context smoke test: pass.
+- Diff whitespace checks: pass.
+- Live SoundCloud, Tauri, and audio: not run. No CI workflows exist.
+
+### Decisions
+
+- Keep existing module boundaries and preserve branch history.
+- Use the merged application API for the next shell task; no structure rewrite.
+
+### Open questions
+
+- CI matrix, packaging, and playback integration remain to be implemented.
+
+### Next action
+
+Continue shell issue #14 using `tasks/application-api.md`; validate live source
+and audio separately from offline tests.
+
 ## 2026-11-17 | Agent: OpenCode | Task: #11
 
 ### Goal

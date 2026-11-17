@@ -62,4 +62,6 @@ chmod +x tools/yt-dlp_linux
 cargo run --locked -p fuzzy-soundcloud --bin soundcloud-probe -- search 'lofi hip hop' --limit 5 --yt-dlp ./tools/yt-dlp_linux
 ```
 
-Запуск проверен на Windows. Проверка Linux пока не выполнена.
+Автоматические Rust-тесты, rustfmt и строгий Clippy прошли на Windows и Linux.
+Свежие сетевые запросы и воспроизведение в рамках интеграционного ревью не
+проверялись; эти проверки не подтверждают работоспособность живого сервиса.

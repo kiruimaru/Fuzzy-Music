@@ -4,8 +4,9 @@ Fuzzy Music is a university desktop music player project for Windows and Linux.
 The first release is intended to search public SoundCloud tracks and stream
 available audio without requiring users to obtain API keys manually.
 
-The repository includes a standalone Rust SoundCloud prototype. The Tauri 2
-application with a React + TypeScript interface remains a next step.
+The repository includes a standalone Rust SoundCloud prototype and a typed
+application API. The Tauri 2 application with a React + TypeScript interface
+remains a next step.
 
 ## Project goals
 
@@ -24,7 +25,7 @@ first release:
 
 | Technology | Responsibility | Status |
 |---|---|---|
-| Rust | Source integration and request control | Implemented prototype |
+| Rust | Source integration, request control, typed application API | Implemented |
 | yt-dlp | SoundCloud search, metadata, and stream discovery | Used by prototype |
 | Cargo, rustfmt, Clippy | Build, tests, formatting, and linting | Available |
 | Git and GitHub | Version control and Pull Request review | In use |
@@ -41,6 +42,20 @@ DTOs and safe errors without Tauri. See the contracts for worker/cancellation
 integration and the compilable `crates/application/examples/search.rs` example.
 Team responsibilities are recorded in
 [`docs/team.md`](docs/team.md).
+
+## Repository layout
+
+- `crates/soundcloud`: source adapter, extractor process control, and probe CLI.
+- `crates/application`: serializable search/resolve DTOs, safe errors, offline
+  boundary tests, and a blocking-worker example.
+- `scripts`: shared agent context checks and Windows extractor setup/probes.
+- `docs/architecture` and `docs/decisions`: contracts and durable decisions.
+- `docs/project-context.md`, `docs/ai-log.md`, and `tasks`: current state and
+  contributor handoffs.
+- `.github`: issue and PR templates. Automated CI is not configured yet.
+
+Keep future Tauri commands above `crates/application`; the frontend must use
+the documented DTOs. Playback and persistence remain planned Rust modules.
 
 ## Quick start on Windows x64
 
@@ -81,13 +96,16 @@ full usage and Linux instructions.
 6. Open a Pull Request and request review from a second contributor.
 
 ```text
-cargo test --workspace --locked
+cargo test --workspace --all-targets --locked
 cargo clippy --workspace --all-targets --locked -- -D warnings
 cargo fmt --all --check
+bash scripts/test-ai-context.sh
+bash -n scripts/ai-context.sh scripts/test-ai-context.sh
 ```
 
-Tests run without SoundCloud access. Live connectivity, audio playback, the
-Tauri shell, and Linux execution require separate verification.
+Tests run without SoundCloud access. Rust checks and context tests have passed
+locally on Windows and Linux; these are not CI results. Live connectivity,
+audio playback, and the Tauri shell require separate verification.
 
 ## License
 

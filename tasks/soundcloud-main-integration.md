@@ -1,5 +1,13 @@
 # Task: Integrate the SoundCloud prototype with current main
 
+## Integration review update (2026-11-17)
+
+PR #12 is merged into main after code review and Linux verification, followed
+by API PR #15 and context-test PR #13. PR #1 was already closed when reviewed.
+The original source branch remains unchanged. Earlier publication instructions
+below are historical. See `tasks/pr-integration-review.md` for current status;
+the next implementation task is shell issue #14.
+
 ## Goal
 
 Continue PR #1 in a separate reviewable branch while preserving the current

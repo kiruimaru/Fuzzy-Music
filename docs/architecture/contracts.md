@@ -19,9 +19,10 @@ command implementation. Its public Rust API is preserved from PR #1:
   stderr and must not be forwarded directly to the UI.
 
 `crates/application` now implements the DTO boundary independently of Tauri.
-The policies below are introduced in this API task and require contributor
-review before shell integration; they are not prior joint agreements.
-The source adapter's public API remains unchanged.
+PR #15 was reviewed and merged with the policies below. Both module owners
+must still confirm their shell integration responsibilities before wiring IPC;
+this merge does not establish an earlier joint agreement. The source adapter's
+public API remains unchanged.
 
 ## Track
 

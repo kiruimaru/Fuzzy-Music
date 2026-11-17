@@ -36,7 +36,9 @@ PR #12 is OPEN at publication: this branch is stacked on
 `feat/soundcloud-main-integration` (12c21c1). Review and merge #12 first, then
 retarget the API PR to `main` and recheck its diff and checks. Do not merge the
 API into the temporary source branch. PR #13 is independent, not a prerequisite.
-The published API PR is linked from [issue #14](https://github.com/kiruimaru/Fuzzy-Music/issues/14).
+Published [API PR #15](https://github.com/kiruimaru/Fuzzy-Music/pull/15), review
+requested from `kiruimaru`; [issue #14](https://github.com/kiruimaru/Fuzzy-Music/issues/14)
+now links it instead of describing the API as unpublished. Nothing was merged.
 
 For the shell owner:
 

@@ -84,9 +84,11 @@ Publish the application boundary and actionable handoff for issue #14.
 
 ### Next action
 
-Commit/push the reviewed files, open the stacked API PR, request `kiruimaru`,
-and link it from #14 while preserving the shell requirements. The issue is the
-publication entry point; no API approval or live playback is claimed.
+Published [API PR #15](https://github.com/kiruimaru/Fuzzy-Music/pull/15) with
+review requested from `kiruimaru`; updated only the API dependency paragraph
+in #14, preserving shell requirements. API commit: `0ff65fe`. Await #12 review
+and merge, then retarget #15 to main and recheck before API merge. Nothing was
+merged or closed; no API approval or live playback is claimed.
 
 ## 2026-11-17 | Agent: OpenCode | Task: application-api
 

@@ -1,0 +1,19 @@
+:root { font-family: system-ui, sans-serif; color: #181818; background: #fff; font-size: 16px; }
+* { box-sizing: border-box; }
+body { margin: 0; }
+main { max-width: 760px; margin: auto; padding: 24px; }
+h1 { font-size: 24px; margin: 0 0 24px; }
+label { display: block; margin-bottom: 8px; }
+input, button { font: inherit; min-height: 36px; }
+button { cursor: pointer; }
+button:disabled { cursor: default; }
+.search { display: flex; gap: 8px; flex-wrap: wrap; }
+input { min-width: 0; flex: 1 1 180px; }
+ul { list-style: none; padding: 0; }
+li { display: flex; align-items: center; gap: 16px; padding: 12px 0; border-top: 1px solid #ddd; }
+li div { flex: 1; min-width: 0; }
+strong, span { display: block; overflow-wrap: anywhere; }
+span { color: #555; margin-top: 4px; }
+.playback { border-top: 1px solid #aaa; margin-top: 24px; padding-top: 8px; }
+.playback p { overflow-wrap: anywhere; }
+.playback button { margin-right: 8px; }

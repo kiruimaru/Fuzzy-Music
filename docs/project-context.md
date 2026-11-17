@@ -1,7 +1,7 @@
 # Fuzzy Music Project Context
 
 **Last reviewed:** 2026-11-17  
-**Status:** source, application API, and context checks merged; shell pending
+**Status:** source/API merged; minimal Tauri shell implemented and checked on Linux
 
 ## Product
 
@@ -52,21 +52,27 @@ response formats inside the source adapter.
 - The repository and local Rust environment were prepared.
 - `crates/application` adds synchronous typed search/resolve DTOs, safe errors,
   and explicit request control without a Tauri/runtime dependency. See decision
-  0002 and `tasks/application-api.md`. PR #15 is merged; both module owners
-  should confirm shell integration policies before wiring IPC.
+  0002 and `tasks/application-api.md`. PR #15 is merged; the shell uses its
+  policies unchanged. Joint human owner review remains pending.
 - `crates/soundcloud` contains the standalone Rust search and stream probe,
   including request timeout, cancellation, and process-group cleanup.
-- On Windows and Linux, `cargo test --workspace --all-targets --locked` passed 14 tests,
-  including the offline extractor-to-application test; the child-process
-  fixture is intentionally ignored during normal discovery.
+- The source/application boundary previously passed 14 tests on Windows/Linux.
+  The shell workspace passed 20 offline tests on Linux, with child fixture and
+  opt-in live audio test ignored during normal discovery.
 - Strict Clippy and rustfmt checks passed for the integrated workspace.
-- Playback integration and the Tauri shell have not yet been added to this
-  repository.
+- `src-tauri` and `src` implement minimal search, fresh resolve, owned mpv Play/
+  Stop, cancellation, generation guards and exit cleanup. Source code is unchanged.
+- Five frontend tests, two browser fixture smoke tests (1000px/320px), and a
+  complete Tauri debug build passed. Live source/resolve/mpv play/Stop/replay
+  passed using an existing local proxy; the real window returned ten tracks,
+  reached Playing with an active audio-device stream and stopped its mpv child.
+  Human listening and Windows shell verification are not claimed.
 
-These are local automated checks, not CI or fresh live SoundCloud evidence.
-CI workflows are not configured. Historical live results are described in
-PR #1; live search/resolve and audio were not repeated during this review.
-See [`../tasks/pr-integration-review.md`](../tasks/pr-integration-review.md).
+These are local checks, not CI. Linux native rendering needed
+`WEBKIT_DISABLE_DMABUF_RENDERER=1`; direct SoundCloud access timed out.
+See [`shell-development.md`](shell-development.md) and
+[`../tasks/tauri-shell-14.md`](../tasks/tauri-shell-14.md) for setup and limits.
+CI workflows are not configured.
 
 ## Agreed work split
 
@@ -80,8 +86,8 @@ Before connecting the modules, both owners must agree on the contracts in
 [`architecture/contracts.md`](architecture/contracts.md).
 The prototype's Rust types are internal source-adapter contracts, not Tauri
 DTOs. Mapping and safe errors now live in `crates/application`; review the new
-contract policies together before connecting Tauri. Worker dispatch, local
-stale-response guards and cancellation IPC remain shell integration work.
+contract policies together during contributor review. Worker dispatch, local
+stale-response guards and cancellation IPC now live in `src-tauri`.
 
 ## Delivery order
 
@@ -89,8 +95,9 @@ PR #12 (source), PR #15 (application API, retargeted to main), and PR #13
 (context checks) are merged into main. The journal conflict in #13 was resolved
 by preserving both histories. Old source branches need no separate code merge:
 their implementation is already integrated, including the later guide edits.
-Continue [#14](https://github.com/kiruimaru/Fuzzy-Music/issues/14) using
-`../tasks/application-api.md`. No Tauri or mpv implementation is included.
+Issue #14 implementation is in `feat/issue-14-tauri-shell`, with task context
+`../tasks/tauri-shell-14.md`. Next acceptance work is contributor contract review,
+Windows verification and human listening confirmation.
 
 1. Confirm source connectivity and keep the source adapter isolated.
 2. Create the minimal Tauri application and search states.
@@ -110,8 +117,8 @@ Continue [#14](https://github.com/kiruimaru/Fuzzy-Music/issues/14) using
 
 ## Open decisions
 
-- Final playback integration API between Rust and mpv.
-- How yt-dlp and mpv are distributed or detected on each platform.
+- Full playback API beyond the implemented Play/Stop slice (decision 0003).
+- How yt-dlp and mpv are distributed; discovery currently uses PATH/env overrides.
 - SQLite schema and migration strategy.
 - Minimum supported Windows and Linux versions.
 - CI matrix and release artifact format.

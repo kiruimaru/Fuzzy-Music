@@ -1,5 +1,13 @@
 # Task: Typed application API
 
+## Shell Implementation Update (2026-11-17)
+
+The minimal issue #14 consumer is now implemented in `src-tauri` and `src`.
+See `tasks/tauri-shell-14.md`, decision 0003 and `docs/shell-development.md`.
+The historical handoff below is preserved; worker dispatch, cancellation IPC
+and generation guards are no longer missing. Joint owner review, Windows shell
+checks and human listening confirmation remain pending.
+
 ## Integration review update (2026-11-17)
 
 PR #12 was merged, PR #15 was retargeted to main and merged after review,

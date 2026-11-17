@@ -48,6 +48,48 @@ Copy this block for a new entry and place newest entries at the top.
 <the next concrete step>
 ```
 
+## 2026-11-17 | Agent: Codex | Task: tauri-shell-14
+
+### Goal
+
+Implement the minimal native search -> resolve -> mpv -> Stop slice in #14.
+
+### Changed
+
+- Added Tauri 2/React TypeScript shell, typed commands, blocking workers, separate
+  generations/cancellation, fresh resolve, owned mpv groups and exit cleanup.
+- Added process/race tests, frontend regressions, browser fixture smoke and
+  an opt-in live playback test; source adapter code/API unchanged.
+- Updated contracts, README/context, decision 0003, shell setup and task handoffs.
+
+### Checks
+
+- Locked workspace tests: pass, 20 passed, 2 ignored. Strict Clippy/rustfmt: pass.
+- Frontend: 5 tests and 2 browser smoke tests pass; TypeScript/build pass.
+- Full native Tauri debug build, context smoke and Bash syntax: pass.
+- Direct live source: network timeout. Existing proxy: live search and two
+  resolve/play/Stop cycles passed. Real window returned ten tracks, reached
+  Playing with an active mpv audio-device stream; Stop removed its mpv child.
+- Closing the real window during replay removed both app and mpv. Windows
+  no-console flags are set on the command-group builder, which owns spawn flags.
+- Native rendering needed the documented DMABUF workaround. Windows and human
+  listening checks were unavailable; fixture tests are not live audio proof.
+
+### Decisions
+
+- Decision 0003 uses merged DTOs, shell-local request state and headless mpv;
+  startup readiness is a fixed marker, with exit/deadline error handling.
+
+### Open questions
+
+- Joint human contract review, Windows validation and listening confirmation
+  remain before claiming complete issue acceptance.
+
+### Next action
+
+Review `tasks/tauri-shell-14.md` and run target Windows/manual audio checks.
+No issue closure or external messages performed.
+
 ## 2026-11-17 | Agent: Codex | Task: pr-integration-review
 
 ### Goal

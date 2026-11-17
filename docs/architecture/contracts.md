@@ -19,10 +19,10 @@ command implementation. Its public Rust API is preserved from PR #1:
   stderr and must not be forwarded directly to the UI.
 
 `crates/application` now implements the DTO boundary independently of Tauri.
-PR #15 was reviewed and merged with the policies below. Both module owners
-must still confirm their shell integration responsibilities before wiring IPC;
-this merge does not establish an earlier joint agreement. The source adapter's
-public API remains unchanged.
+PR #15 was reviewed and merged with the policies below. The shell uses them
+unchanged in issue #14; decision 0003 records its responsibilities. Joint human
+owner review remains pending; implementation does not establish an earlier
+agreement. The source adapter's public API remains unchanged.
 
 ## Track
 
@@ -85,9 +85,10 @@ playback can no longer use it. No playback engine is implemented here.
 ## Shell integration
 
 `Application::search_tracks` and `resolve_track` are synchronous blocking calls.
-A future async Tauri command MUST dispatch them to its blocking worker pool and
+An async Tauri command MUST dispatch them to its blocking worker pool and
 await completion; merely declaring a command async does not make these calls
-nonblocking. No Tauri bridge or runtime is provided by this crate.
+nonblocking. No Tauri bridge or runtime is provided by this crate; `src-tauri`
+now supplies the bridge, workers, cancellation IPC and safe worker errors.
 See the compilable CLI example `crates/application/examples/search.rs`:
 `cargo check -p fuzzy-application --example search --locked`.
 
@@ -98,13 +99,37 @@ Cancellation can race with successful completion: each search/resolve owner
 must increment a local generation on every new intent (including clearing the
 query), capture it when starting work, and apply success/error/loading updates
 only if it still matches. Search and playback selection need separate local
-generations. No global registry is needed. A concrete cancel IPC command and
-worker-panic translation remain shell responsibilities.
+generations. No global registry is needed. Cancel IPC and worker-panic translation
+are implemented by the shell.
 
 For issue #14, Stop must invalidate the playback generation and cancel pending
 resolve before stopping mpv; a late resolve must never restart playback. Window
 close must cancel requests and clean up shell-owned playback processes. See
-`tasks/application-api.md` for dependency order and the integration checklist.
+`tasks/tauri-shell-14.md` and `docs/shell-development.md` for verification.
+
+The minimal shell commands are:
+
+```ts
+search_tracks({ generation, request: SearchTracksRequest }): Promise<SearchTracksResponse>
+cancel_search({ generation }): Promise<void>
+play_track({ generation, request: ResolveTrackRequest }): Promise<void>
+stop_playback({ generation }): Promise<void>
+playback_status(): Promise<{
+  generation: number;
+  state: "idle" | "loading" | "playing" | "stopped" | "error";
+  trackId: string | null;
+  error: string | null;
+}>
+```
+
+Each intent includes a strictly increasing safe-integer generation, independently
+for search and playback. Old/equal command generations are rejected even when
+worker scheduling reorders them. Error results use AppError; status.error is
+also a fixed safe message. Search never changes playback. play_track completes
+after fresh resolution and process creation; loading continues until mpv reports
+playback initialization, or its startup deadline/exit reports error. UI labels
+distinguish source resolving from player startup. This small status is specific
+to #14, not the full future PlaybackSnapshot below.
 
 ## Playback
 

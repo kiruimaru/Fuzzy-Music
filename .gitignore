@@ -29,3 +29,8 @@ rustc-ice-*.txt
 .env
 .env.*
 !.env.example
+node_modules/
+/dist/
+/src-tauri/gen/
+/test-results/
+/playwright-report/

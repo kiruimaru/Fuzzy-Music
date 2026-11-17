@@ -84,6 +84,11 @@ playback can no longer use it. No playback engine is implemented here.
 
 ## Shell integration
 
+The shell snapshots a shared immutable network policy at startup and explicitly
+applies it to extractor and player child Commands. Existing source constructors
+remain compatible. See decision 0004 for Windows system proxy/env precedence,
+restart behavior and PAC/bypass limitations. No frontend contract changes.
+
 `Application::search_tracks` and `resolve_track` are synchronous blocking calls.
 An async Tauri command MUST dispatch them to its blocking worker pool and
 await completion; merely declaring a command async does not make these calls

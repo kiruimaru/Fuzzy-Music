@@ -111,7 +111,12 @@ Normal tests run without SoundCloud access. The source/API checks previously
 passed on Windows and Linux; the shell, frontend and live playback checks passed
 locally on Linux with the environment limits documented in
 [shell development](docs/shell-development.md). These are not CI results;
-Windows shell validation and human listening confirmation remain pending.
+Windows shell validation also passed for the network-policy follow-up: search,
+fresh resolve, Playing, proxy connection and Stop were observed. The user confirmed
+working search; audible playback was confirmed on an earlier build, not reverified
+by listening on this build. See [Windows network policy](docs/decisions/0004-windows-network-policy.md)
+for startup refresh and PAC/bypass limitations. These changes have not been
+retested on Linux; non-Windows routing uses inherited proxy settings or normal routing.
 
 For the desktop shell:
 

@@ -105,6 +105,7 @@ impl Control {
 }
 
 struct Shell {
+    network: fuzzy_application::NetworkPolicy,
     application: Application,
     mpv: PathBuf,
     control: Mutex<Control>,
@@ -123,10 +124,16 @@ impl Drop for Active<'_> {
 
 impl Shell {
     fn new() -> Self {
+        let network = fuzzy_application::NetworkPolicy::detect();
+        eprintln!("Network: {}", network.diagnostic());
         Self {
-            application: Application::new(SoundCloudClient::new(
-                std::env::var_os("FUZZY_YTDLP").unwrap_or_else(|| "yt-dlp".into()),
-            )),
+            application: Application::new(
+                SoundCloudClient::new(
+                    std::env::var_os("FUZZY_YTDLP").unwrap_or_else(|| "yt-dlp".into()),
+                )
+                .with_network(network.clone()),
+            ),
+            network,
             mpv: std::env::var_os("FUZZY_MPV")
                 .map(PathBuf::from)
                 .unwrap_or_else(|| "mpv".into()),
@@ -181,7 +188,11 @@ impl Shell {
             return Err(cancelled());
         }
         let result = resolved.and_then(|stream| {
-            let player = playback::Player::start(&self.mpv, &stream.stream_url)?;
+            let player = playback::Player::start_with_network(
+                &self.mpv,
+                &stream.stream_url,
+                Some(&self.network),
+            )?;
             control.status.track_id = Some(stream.track.id);
             control.player = Some(player);
             Ok(())
@@ -371,6 +382,7 @@ mod tests {
         fn shell(&self) -> Arc<Shell> {
             let executable = self.0.join(format!("tool{}", std::env::consts::EXE_SUFFIX));
             Arc::new(Shell {
+                network: fuzzy_application::NetworkPolicy::default(),
                 application: Application::new(SoundCloudClient::new(&executable)),
                 mpv: executable,
                 control: Mutex::new(Control::default()),

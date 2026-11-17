@@ -131,4 +131,15 @@ using the existing proxy. Native window search returned ten real tracks;
 Play reached Playing and created an active, unmuted mpv audio-device stream;
 Stop removed the owned mpv process. No human listening verification is claimed.
 Closing the native window during replay also removed the app and its mpv child.
-Windows was not available and remains untested.
+Windows was not available for that Linux verification session. Subsequent Windows
+native checks passed; see [task evidence](../tasks/windows-network-integration.md).
+
+## Windows network routing
+
+The desktop app automatically uses enabled Windows manual HTTP proxy settings
+unless explicit inherited proxy environment overrides are present. With proxy
+disabled, normal OS routing (including a VPN TUN) applies. Restart after changing
+proxy settings. PAC/WPAD and advanced bypass matching are not implemented;
+fixed diagnostics identify unsupported configurations without logging endpoints
+or credentials. See [network policy decision](decisions/0004-windows-network-policy.md).
+External tool packaging is still required before installer readiness.

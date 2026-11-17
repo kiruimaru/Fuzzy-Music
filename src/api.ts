@@ -22,10 +22,27 @@ export type PlaybackStatus = {
   error: string | null;
 };
 
+export type Playlist = {
+  id: string;
+  title: string;
+  author: string;
+  artworkUrl: string | null;
+  trackCount: number | null;
+  durationMs: number | null;
+  source: "soundcloud";
+  sourceUrl: string;
+};
+
+export type PlaylistTracks = {
+  playlist: Playlist;
+  tracks: Track[];
+  skippedTrackCount: number;
+};
+
 export const api = {
   search: (generation: number, query: string) =>
     invoke<{ tracks: Track[]; nextPageToken: string | null }>("search_tracks", {
-      generation, request: { query, limit: 10 },
+      generation, request: { query, limit: 30 },
     }),
   cancelSearch: (generation: number) => invoke<void>("cancel_search", { generation }),
   play: (generation: number, track: Track) =>
@@ -34,6 +51,15 @@ export const api = {
     }),
   stop: (generation: number) => invoke<void>("stop_playback", { generation }),
   status: () => invoke<PlaybackStatus>("playback_status"),
+  searchPlaylists: (generation: number, query: string) =>
+    invoke<{ playlists: Playlist[]; nextPageToken: string | null }>("search_playlists", {
+      generation, request: { query, limit: 30 },
+    }),
+  playlistTracks: (generation: number, playlist: Playlist) =>
+    invoke<PlaylistTracks>("playlist_tracks", {
+      generation, request: { source: playlist.source, playlistUrl: playlist.sourceUrl },
+    }),
+  cancelPlaylists: (generation: number) => invoke<void>("cancel_playlists", { generation }),
   pause: (generation: number, paused: boolean) => invoke<void>("update_playback", { generation, action: { type: "pause", paused } }),
   seek: (generation: number, positionMs: number) => invoke<void>("update_playback", { generation, action: { type: "seek", position_ms: positionMs } }),
   volume: (generation: number, volume: number) => invoke<void>("update_playback", { generation, action: { type: "volume", volume } }),
@@ -48,6 +74,7 @@ export function safeMessage(error: unknown): string {
       case "cancelled": return "Cancelled.";
       case "source_unavailable": return "Source unavailable. Check yt-dlp or try another track.";
       case "playback_failed": return "Playback failed. Check mpv and your audio output, or try another track.";
+      case "storage_failed": return "Could not save local data. Check free space and permissions.";
     }
   }
   return "Operation failed. Please retry.";

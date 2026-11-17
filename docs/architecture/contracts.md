@@ -82,6 +82,48 @@ Resolve immediately before playback, using `Track.sourceUrl` as `trackUrl`.
 The response URL is temporary, with no guaranteed expiry time; re-resolve if
 playback can no longer use it. No playback engine is implemented here.
 
+## Playlists
+
+Public playlist discovery uses the SoundCloud web API, not `yt-dlp`, because
+the extractor cannot search playlists. Decision 0006 records transport,
+`client_id` handling and limits. Tracks still resolve and play through the
+unchanged single-track path.
+
+```ts
+type Playlist = {
+  id: string;
+  title: string;
+  author: string;
+  artworkUrl: string | null;
+  trackCount: number | null;
+  durationMs: number | null;
+  source: "soundcloud";
+  sourceUrl: string;
+};
+
+type SearchPlaylistsRequest = { query: string; limit?: number };
+type SearchPlaylistsResponse = {
+  playlists: Playlist[];
+  nextPageToken: string | null;
+};
+
+type PlaylistTracksRequest = { source: "soundcloud"; playlistUrl: string };
+type PlaylistTracksResponse = {
+  playlist: Playlist;
+  tracks: Track[];
+  skippedTrackCount: number;
+};
+```
+
+Limit defaults to 10 and must be 1..50. `nextPageToken` is always null.
+`sourceUrl` is the public set permalink; the UI never builds playlist or track
+URLs. `trackCount` is the source-advertised count, while `tracks` may be
+shorter when entries lack an id, title or public permalink; the difference is
+reported as `skippedTrackCount`. Playlist search and playlist loading use a
+generation stream separate from track search, so either search can be replaced
+or cancelled without touching the other. Playback selection keeps its own
+generation.
+
 ## Shell integration
 
 The shell snapshots a shared immutable network policy at startup and explicitly

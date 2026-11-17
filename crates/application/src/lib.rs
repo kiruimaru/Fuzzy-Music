@@ -30,6 +30,48 @@ pub struct SearchTracksRequest {
     pub limit: Option<usize>,
 }
 
+#[derive(Debug, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct Playlist {
+    pub id: String,
+    pub title: String,
+    pub author: String,
+    pub artwork_url: Option<String>,
+    pub track_count: Option<u32>,
+    pub duration_ms: Option<u64>,
+    pub source: Source,
+    pub source_url: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SearchPlaylistsRequest {
+    pub query: String,
+    pub limit: Option<usize>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SearchPlaylistsResponse {
+    pub playlists: Vec<Playlist>,
+    pub next_page_token: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PlaylistTracksRequest {
+    pub source: Source,
+    pub playlist_url: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PlaylistTracksResponse {
+    pub playlist: Playlist,
+    pub tracks: Vec<Track>,
+    pub skipped_track_count: u32,
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SearchTracksResponse {
@@ -89,6 +131,11 @@ impl From<SoundCloudError> for AppError {
             SoundCloudError::ExtractorFailed { .. } | SoundCloudError::InvalidResponse(_) => {
                 (ErrorCode::SourceUnavailable, "Source request failed.", true)
             }
+            SoundCloudError::Network(_) => (
+                ErrorCode::SourceUnavailable,
+                "Playlist search failed. Check the connection and retry.",
+                true,
+            ),
         };
         Self {
             code,
@@ -125,6 +172,29 @@ impl From<fuzzy_soundcloud::Track> for Track {
             stream_url: None,
             source: Source::Soundcloud,
             source_url: track.webpage_url,
+        }
+    }
+}
+
+impl From<fuzzy_soundcloud::Playlist> for Playlist {
+    fn from(playlist: fuzzy_soundcloud::Playlist) -> Self {
+        let duration_ms = playlist.duration_seconds.and_then(|seconds| {
+            let millis = (seconds * 1000.0).round();
+            (seconds.is_finite() && seconds >= 0.0 && millis <= 9_007_199_254_740_991.0)
+                .then_some(millis as u64)
+        });
+        Self {
+            id: playlist.id,
+            title: playlist.title,
+            author: playlist
+                .author
+                .filter(|s| !s.trim().is_empty())
+                .unwrap_or_else(|| "Unknown artist".into()),
+            artwork_url: playlist.artwork_url,
+            track_count: playlist.track_count,
+            duration_ms,
+            source: Source::Soundcloud,
+            source_url: playlist.webpage_url,
         }
     }
 }
@@ -167,6 +237,44 @@ impl Application {
         Ok(ResolveTrackResponse {
             track: stream.track.into(),
             stream_url: stream.url,
+        })
+    }
+
+    pub fn search_playlists(
+        &self,
+        request: SearchPlaylistsRequest,
+        options: &RequestOptions,
+    ) -> Result<SearchPlaylistsResponse, AppError> {
+        let results = self.soundcloud.search_playlists_with_options(
+            &request.query,
+            request.limit.unwrap_or(10),
+            options,
+        )?;
+        Ok(SearchPlaylistsResponse {
+            playlists: results.playlists.into_iter().map(Playlist::from).collect(),
+            next_page_token: None,
+        })
+    }
+
+    pub fn playlist_tracks(
+        &self,
+        request: PlaylistTracksRequest,
+        options: &RequestOptions,
+    ) -> Result<PlaylistTracksResponse, AppError> {
+        let result = match request.source {
+            Source::Soundcloud => self
+                .soundcloud
+                .playlist_tracks_with_options(&request.playlist_url, options)?,
+        };
+        let skipped_track_count = result
+            .playlist
+            .track_count
+            .unwrap_or(result.tracks.len() as u32)
+            .saturating_sub(result.tracks.len() as u32);
+        Ok(PlaylistTracksResponse {
+            playlist: result.playlist.into(),
+            tracks: result.tracks.into_iter().map(Track::from).collect(),
+            skipped_track_count,
         })
     }
 }
@@ -367,7 +475,7 @@ mod tests {
             .code,
             ErrorCode::InvalidInput
         );
-        for limit in [0, 21] {
+        for limit in [0, 101] {
             assert_eq!(
                 app.search_tracks(
                     SearchTracksRequest {

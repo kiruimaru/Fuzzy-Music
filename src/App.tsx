@@ -1,23 +1,48 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { api, safeMessage, type Track } from "./api";
+import { api, safeMessage, type Playlist, type Track } from "./api";
 
 // Keep new webview sessions newer than requests retained by the Rust process.
 const generationBase = Date.now() * 1000;
 
 function time(milliseconds: number) {
-  const seconds = Math.floor(milliseconds / 1000);
-  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
+  const seconds = Math.max(0, Math.floor(milliseconds / 1000));
+  const minutes = Math.floor(seconds / 60);
+  return `${minutes}:${String(seconds % 60).padStart(2, "0")}`;
+}
+
+function Artwork({ track, size }: { track: Track | null; size: "small" | "large" }) {
+  if (track?.artworkUrl) {
+    return <img className={`artwork artwork-${size}`} src={track.artworkUrl} alt="" loading="lazy" />;
+  }
+  return <div className={`artwork artwork-${size} artwork-fallback`} aria-hidden="true">♪</div>;
+}
+
+function PlayIcon() {
+  return <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M8 5.5v13l11-6.5z" /></svg>;
+}
+
+function PauseIcon() {
+  return <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M7 5h3.5v14H7zM13.5 5H17v14h-3.5z" /></svg>;
+}
+
+function StopIcon() {
+  return <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M6.5 6.5h11v11h-11z" /></svg>;
 }
 
 export function App() {
+  const [view, setView] = useState<"tracks" | "playlists">("tracks");
   const [query, setQuery] = useState("");
   const [tracks, setTracks] = useState<Track[]>([]);
+  const [playlists, setPlaylists] = useState<Playlist[]>([]);
+  const [openPlaylist, setOpenPlaylist] = useState<{ playlist: Playlist; skipped: number } | null>(null);
+  const [playlistLoading, setPlaylistLoading] = useState(false);
   const [searchState, setSearchState] = useState("idle");
   const [searchError, setSearchError] = useState("");
   const [playback, setPlayback] = useState("idle");
   const [playError, setPlayError] = useState("");
   const [selected, setSelected] = useState<Track | null>(null);
   const searchGeneration = useRef(generationBase);
+  const playlistGeneration = useRef(generationBase);
   const playbackGeneration = useRef(generationBase);
   const resolving = useRef(false);
   const [position, setPosition] = useState(0);
@@ -60,6 +85,7 @@ export function App() {
       disposed = true;
       window.clearInterval(timer);
       void api.cancelSearch(++searchGeneration.current).catch(() => {});
+      void api.cancelPlaylists(++playlistGeneration.current).catch(() => {});
       void api.stop(++playbackGeneration.current).catch(() => {});
     };
   }, []);
@@ -69,20 +95,55 @@ export function App() {
     setSearchState("idle");
     setSearchError("");
     setTracks([]);
+    setPlaylists([]);
+    setOpenPlaylist(null);
     void api.cancelSearch(++searchGeneration.current).catch(() => {});
+    void api.cancelPlaylists(++playlistGeneration.current).catch(() => {});
+  }
+
+  function switchView(next: "tracks" | "playlists") {
+    setView(next);
+    setOpenPlaylist(null);
+    setSearchState("idle");
+    setSearchError("");
+    setTracks([]);
+    setPlaylists([]);
+    void api.cancelSearch(++searchGeneration.current).catch(() => {});
+    void api.cancelPlaylists(++playlistGeneration.current).catch(() => {});
   }
 
   async function search(event: FormEvent) {
     event.preventDefault();
-    const generation = ++searchGeneration.current;
+    const generation = view === "playlists"
+      ? ++playlistGeneration.current
+      : ++searchGeneration.current;
     setSearchError("");
     setTracks([]);
+    setPlaylists([]);
+    setOpenPlaylist(null);
     if (!query.trim()) {
       setSearchState("idle");
-      void api.cancelSearch(generation).catch(() => {});
+      if (view === "playlists") {
+        void api.cancelPlaylists(generation).catch(() => {});
+      } else {
+        void api.cancelSearch(generation).catch(() => {});
+      }
       return;
     }
     setSearchState("searching");
+    if (view === "playlists") {
+      try {
+        const response = await api.searchPlaylists(generation, query);
+        if (generation !== playlistGeneration.current) return;
+        setPlaylists(response.playlists);
+        setSearchState(response.playlists.length ? "ready" : "empty");
+      } catch (error) {
+        if (generation !== playlistGeneration.current) return;
+        setSearchState("error");
+        setSearchError(safeMessage(error));
+      }
+      return;
+    }
     try {
       const response = await api.search(generation, query);
       if (generation !== searchGeneration.current) return;
@@ -92,6 +153,26 @@ export function App() {
       if (generation !== searchGeneration.current) return;
       setSearchState("error");
       setSearchError(safeMessage(error));
+    }
+  }
+
+  async function openPlaylistTracks(playlist: Playlist) {
+    const generation = ++playlistGeneration.current;
+    setPlaylistLoading(true);
+    setSearchError("");
+    setOpenPlaylist(null);
+    try {
+      const response = await api.playlistTracks(generation, playlist);
+      if (generation !== playlistGeneration.current) return;
+      setOpenPlaylist({ playlist: response.playlist, skipped: response.skippedTrackCount });
+      setTracks(response.tracks);
+      setSearchState("ready");
+    } catch (error) {
+      if (generation !== playlistGeneration.current) return;
+      setSearchState("error");
+      setSearchError(safeMessage(error));
+    } finally {
+      if (generation === playlistGeneration.current) setPlaylistLoading(false);
     }
   }
 
@@ -122,6 +203,8 @@ export function App() {
     resolving.current = false;
     setPlayback("stopping");
     setPlayError("");
+    setSeekDraft(null);
+    setVolumeDraft(null);
     try {
       await api.stop(generation);
       if (generation === playbackGeneration.current) setPlayback("stopped");
@@ -144,72 +227,184 @@ export function App() {
     } finally { setControlling(false); }
   }
 
-  return <main>
-    <h1>Fuzzy Music</h1>
-    <form onSubmit={search}>
-      <label htmlFor="query">Track or artist</label>
-      <div className="search">
-        <input id="query" value={query} onChange={event => changeQuery(event.target.value)} />
-        <button type="submit" disabled={!query.trim()}>Search</button>
-        {searchState === "searching" && <button type="button" onClick={() => {
+  const statusText =
+    playback === "resolving" ? "Resolving..." :
+    playback === "starting" ? "Starting audio..." :
+    playback === "playing" ? "Playing" :
+    playback === "paused" ? "Paused" :
+    playback === "stopping" ? "Stopping..." :
+    playback === "stopped" ? "Stopped" :
+    playback === "error" ? playError : "Idle";
+
+  return <div className="app">
+    <aside className="sidebar" aria-label="Navigation">
+      <div className="brand"><span className="brand-mark">♪</span><span>Fuzzy Music</span></div>
+      <nav className="nav">
+        <span className="nav-item active" aria-current="page">Search</span>
+        <span className="nav-item soon">Favourites <em>soon</em></span>
+        <span className="nav-item">Playlists <em>beta</em></span>
+      </nav>
+      <p className="sidebar-note">Streams public SoundCloud tracks. No account or API key required.</p>
+    </aside>
+
+    <div className="content">
+      <div className="tabs" role="tablist" aria-label="Search type">
+        <button role="tab" aria-selected={view === "tracks"} className={view === "tracks" ? "tab active" : "tab"}
+          onClick={() => switchView("tracks")}>Tracks</button>
+        <button role="tab" aria-selected={view === "playlists"} className={view === "playlists" ? "tab active" : "tab"}
+          onClick={() => switchView("playlists")}>Playlists</button>
+      </div>
+
+      <form className="search" onSubmit={search}>
+        <label className="sr-only" htmlFor="query">{view === "tracks" ? "Track or artist" : "Playlist name"}</label>
+        <span className="search-icon" aria-hidden="true">⌕</span>
+        <input id="query" value={query}
+          placeholder={view === "tracks" ? "What do you want to listen to?" : "Search public playlists"}
+          onChange={event => changeQuery(event.target.value)} />
+        <button type="submit" className="primary" disabled={!query.trim()}>Search</button>
+        {searchState === "searching" && <button type="button" className="ghost" onClick={() => {
           void api.cancelSearch(++searchGeneration.current).catch(() => {});
+          void api.cancelPlaylists(++playlistGeneration.current).catch(() => {});
           setSearchState("cancelled");
         }}>Cancel</button>}
-      </div>
-    </form>
-    <p role="status" aria-live="polite">
-      {searchState === "idle" ? "Ready" :
-       searchState === "searching" ? "Searching..." :
-       searchState === "empty" ? "No tracks found." :
-       searchState === "cancelled" ? "Search cancelled." :
-       searchState === "error" ? searchError : `${tracks.length} ${tracks.length === 1 ? "track" : "tracks"}`}
-    </p>
-    <section aria-label="Playback" className="playback">
-      <p>{selected ? `${selected.title} - ${selected.author}` : "No track selected"}</p>
-      <p role="status" aria-live="polite">
-        {playback === "resolving" ? "Resolving..." :
-         playback === "starting" ? "Starting audio..." :
-         playback === "playing" ? "Playing" :
-         playback === "paused" ? "Paused" :
-         playback === "stopping" ? "Stopping..." :
-         playback === "stopped" ? "Stopped" :
-         playback === "error" ? playError : "Idle"}
+      </form>
+
+      <p className="results-status" role="status" aria-live="polite">
+        {searchState === "idle" ? "Ready" :
+         searchState === "searching" ? "Searching..." :
+         searchState === "empty" ? (view === "tracks" ? "No tracks found." : "No playlists found.") :
+         searchState === "cancelled" ? "Search cancelled." :
+         searchState === "error" ? searchError :
+         view === "playlists" ? `${playlists.length} ${playlists.length === 1 ? "playlist" : "playlists"}` :
+         `${tracks.length} ${tracks.length === 1 ? "track" : "tracks"}`}
       </p>
+
+      {view === "playlists" && !openPlaylist &&
+        <section aria-label="Playlist results" className="playlist-grid">
+          {playlists.map(playlist => <button key={playlist.id} className="playlist-card"
+            onClick={() => void openPlaylistTracks(playlist)} aria-label={`Open playlist ${playlist.title}`}>
+            {playlist.artworkUrl
+              ? <img className="playlist-cover" src={playlist.artworkUrl} alt="" loading="lazy" />
+              : <div className="playlist-cover artwork-fallback" aria-hidden="true">♪</div>}
+            <strong>{playlist.title}</strong>
+            <span>{playlist.author}</span>
+            <span className="playlist-meta">
+              {playlist.trackCount === null ? "Playlist" : `${playlist.trackCount} ${playlist.trackCount === 1 ? "track" : "tracks"}`}
+            </span>
+          </button>)}
+        </section>}
+
+      {view === "playlists" && !openPlaylist && playlistLoading && <p className="results-status">Loading playlist...</p>}
+
+      {openPlaylist &&
+        <section className="playlist-header">
+          <button className="ghost small" onClick={() => {
+            setOpenPlaylist(null);
+            setTracks([]);
+            setSearchState(playlists.length ? "ready" : "idle");
+          }}>← Back to playlists</button>
+          <div className="playlist-hero">
+            {openPlaylist.playlist.artworkUrl
+              ? <img className="playlist-hero-cover" src={openPlaylist.playlist.artworkUrl} alt="" />
+              : <div className="playlist-hero-cover artwork-fallback" aria-hidden="true">♪</div>}
+            <div>
+              <p className="eyebrow">Playlist</p>
+              <h2>{openPlaylist.playlist.title}</h2>
+              <p className="playlist-by">
+                {openPlaylist.playlist.author} · {tracks.length} of{" "}
+                {openPlaylist.playlist.trackCount ?? tracks.length}{" "}
+                {(openPlaylist.playlist.trackCount ?? tracks.length) === 1 ? "track" : "tracks"}
+              </p>
+              {openPlaylist.skipped > 0 &&
+                <p className="playlist-note">
+                  {openPlaylist.skipped === 1
+                    ? "1 track is unavailable and was skipped."
+                    : `${openPlaylist.skipped} tracks are unavailable and were skipped.`}
+                </p>}
+            </div>
+          </div>
+        </section>}
+
+      {tracks.length > 0 &&
+        <section aria-label="Search results" className="results">
+          <div className="results-head"><span>#</span><span>Title</span><span>Time</span><span /></div>
+          <ul>
+            {tracks.map((track, index) => {
+              const current = selected?.id === track.id;
+              return <li key={track.id} className={current ? "current" : undefined}>
+                <span className="row-index">{current && active ? "▰" : index + 1}</span>
+                <Artwork track={track} size="small" />
+                <div className="row-text">
+                  <strong>{track.title}</strong>
+                  <span>{track.author}</span>
+                </div>
+                <span className="row-duration">{track.durationMs === null ? "--:--" : time(track.durationMs)}</span>
+                <button className="row-play" onClick={() => void play(track)} aria-label={`Play ${track.title}`}>
+                  <PlayIcon />
+                </button>
+              </li>;
+            })}
+          </ul>
+        </section>}
+
+      {tracks.length === 0 && searchState === "idle" &&
+        <section className="empty-state">
+          <h2>{view === "tracks" ? "Find something to play" : "Find a playlist"}</h2>
+          <p>{view === "tracks"
+            ? "Search SoundCloud by track title or artist. Results stream directly through mpv."
+            : "Search public SoundCloud playlists, open one and play any track from it."}</p>
+        </section>}
+    </div>
+
+    <footer className="player" aria-label="Playback">
+      <div className="now-playing">
+        <Artwork track={selected} size="small" />
+        <div className="now-text">
+          <strong>{selected ? selected.title : "No track selected"}</strong>
+          <span>{selected ? selected.author : "Search to begin"}</span>
+        </div>
+      </div>
+
       <div className="transport">
-        <button className="primary" disabled={!active || controlling} onClick={() => void control(generation => api.pause(generation, playback !== "paused"))}>
-          {playback === "paused" ? "Resume" : "Pause"}
-        </button>
-        <button onClick={() => void stop()} disabled={playback === "stopping"}>Stop</button>
-        {selected && <button onClick={() => void play(selected)}>Play again</button>}
+        <p className="transport-status" role="status" aria-live="polite">{statusText}</p>
+        <div className="transport-buttons">
+          <button className="icon-btn" disabled={!active || controlling}
+            aria-label={playback === "paused" ? "Resume" : "Pause"}
+            onClick={() => void control(generation => api.pause(generation, playback !== "paused"))}>
+            {playback === "paused" ? <PlayIcon /> : <PauseIcon />}
+          </button>
+          <button className="icon-btn" onClick={() => void stop()} disabled={playback === "stopping"} aria-label="Stop">
+            <StopIcon />
+          </button>
+          {selected && <button className="ghost small" onClick={() => void play(selected)}>Play again</button>}
+        </div>
       </div>
-      <div className="timeline">
-        <label htmlFor="position">Position</label>
-        <input id="position" type="range" min="0" max={duration ?? 1} step="1000"
-          value={seekDraft ?? Math.min(position, duration ?? 0)} disabled={!active || !seekable || !duration}
-          onChange={event => setSeekDraft(Number(event.target.value))}
-          onPointerCancel={() => setSeekDraft(null)}
-          onBlur={() => setSeekDraft(null)}
-          onPointerUp={event => { if (!active || !seekable || !duration) return; const value = Number(event.currentTarget.value); setSeekDraft(null); void control(generation => api.seek(generation, value)); }}
-          onKeyUp={event => { if (["ArrowLeft", "ArrowRight", "Home", "End", "PageUp", "PageDown"].includes(event.key)) { const value = Number(event.currentTarget.value); setSeekDraft(null); void control(generation => api.seek(generation, value)); } }} />
-        <output>{time(seekDraft ?? position)} / {duration === null ? "--:--" : time(duration)}</output>
+
+      <div className="levels">
+        <div className="timeline">
+          <label htmlFor="position">Position</label>
+          <input id="position" type="range" min="0" max={duration ?? 1} step="1000"
+            value={seekDraft ?? Math.min(position, duration ?? 0)} disabled={!active || !seekable || !duration}
+            onChange={event => setSeekDraft(Number(event.target.value))}
+            onPointerCancel={() => setSeekDraft(null)}
+            onBlur={() => setSeekDraft(null)}
+            onPointerUp={event => { if (!active || !seekable || !duration) return; const value = Number(event.currentTarget.value); setSeekDraft(null); void control(generation => api.seek(generation, value)); }}
+            onKeyUp={event => { if (["ArrowLeft", "ArrowRight", "Home", "End", "PageUp", "PageDown"].includes(event.key)) { const value = Number(event.currentTarget.value); setSeekDraft(null); void control(generation => api.seek(generation, value)); } }} />
+          <output>{time(seekDraft ?? position)} / {duration === null ? "--:--" : time(duration)}</output>
+        </div>
+        <div className="volume">
+          <label htmlFor="volume">Volume</label>
+          <input id="volume" type="range" min="0" max="100" step="1" value={volumeDraft ?? volume} disabled={!active}
+            onChange={event => setVolumeDraft(Number(event.target.value))}
+            onPointerCancel={() => setVolumeDraft(null)}
+            onBlur={() => setVolumeDraft(null)}
+            onPointerUp={event => { if (!active) return; const value = Number(event.currentTarget.value); setVolumeDraft(null); void control(generation => api.volume(generation, value)); }}
+            onKeyUp={event => { if (["ArrowLeft", "ArrowRight", "Home", "End", "PageUp", "PageDown"].includes(event.key)) { const value = Number(event.currentTarget.value); setVolumeDraft(null); void control(generation => api.volume(generation, value)); } }} />
+          <output>{Math.round(volumeDraft ?? volume)}%</output>
+        </div>
       </div>
-      <div className="volume">
-        <label htmlFor="volume">Volume</label>
-        <input id="volume" type="range" min="0" max="100" step="1" value={volumeDraft ?? volume} disabled={!active}
-          onChange={event => setVolumeDraft(Number(event.target.value))}
-          onPointerCancel={() => setVolumeDraft(null)}
-          onBlur={() => setVolumeDraft(null)}
-          onPointerUp={event => { if (!active) return; const value = Number(event.currentTarget.value); setVolumeDraft(null); void control(generation => api.volume(generation, value)); }}
-          onKeyUp={event => { if (["ArrowLeft", "ArrowRight", "Home", "End", "PageUp", "PageDown"].includes(event.key)) { const value = Number(event.currentTarget.value); setVolumeDraft(null); void control(generation => api.volume(generation, value)); } }} />
-        <output>{Math.round(volumeDraft ?? volume)}%</output>
-      </div>
-      {playError && playback !== "error" && <p role="alert">{playError}</p>}
-    </section>
-    <ul aria-label="Search results">
-      {tracks.map(track => <li key={track.id}>
-        <div><strong>{track.title}</strong><span>{track.author}</span></div>
-        <button onClick={() => void play(track)} aria-label={`Play ${track.title}`}>Play</button>
-      </li>)}
-    </ul>
-  </main>;
+
+      {playError && playback !== "error" && <p className="player-error" role="alert">{playError}</p>}
+    </footer>
+  </div>;
 }

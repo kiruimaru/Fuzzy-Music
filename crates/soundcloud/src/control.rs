@@ -33,3 +33,12 @@ impl Default for RequestOptions {
         }
     }
 }
+
+/// Fail fast when an operation was cancelled before or during a blocking call.
+pub(crate) fn check_cancelled(options: &RequestOptions) -> Result<(), crate::SoundCloudError> {
+    if options.cancellation.is_cancelled() {
+        Err(crate::SoundCloudError::Cancelled)
+    } else {
+        Ok(())
+    }
+}

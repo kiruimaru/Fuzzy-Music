@@ -2,7 +2,7 @@
 import { afterEach, expect, test, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { App } from "./App";
-import { api, safeMessage, type Track } from "./api";
+import { api, safeMessage, type Playlist, type Track } from "./api";
 
 vi.mock("./api", async (original) => ({
   ...await original<typeof import("./api")>(),
@@ -10,6 +10,9 @@ vi.mock("./api", async (original) => ({
     search: vi.fn(), cancelSearch: vi.fn().mockResolvedValue(undefined),
     play: vi.fn(), stop: vi.fn().mockResolvedValue(undefined),
     status: vi.fn().mockResolvedValue({ generation: 0, state: "idle" }),
+    searchPlaylists: vi.fn(),
+    playlistTracks: vi.fn(),
+    cancelPlaylists: vi.fn().mockResolvedValue(undefined),
     pause: vi.fn().mockResolvedValue(undefined), seek: vi.fn().mockResolvedValue(undefined),
     volume: vi.fn().mockResolvedValue(undefined),
   },
@@ -95,6 +98,42 @@ test("Stop during resolve ignores late completion and Play can retry", async () 
 test("errors never echo arbitrary IPC diagnostics", () => {
   expect(safeMessage("token=SECRET")).not.toContain("SECRET");
   expect(safeMessage({ code: "playback_failed", message: "SECRET" })).not.toContain("SECRET");
+});
+
+const playlist: Playlist = {
+  id: "9", title: "Chill mix", author: "Lofi Girl", artworkUrl: null,
+  trackCount: 2, durationMs: null, source: "soundcloud",
+  sourceUrl: "https://soundcloud.com/lofi_girl/sets/chill",
+};
+
+test("playlist search and open reuse the same player", async () => {
+  vi.mocked(api.searchPlaylists).mockResolvedValue({ playlists: [playlist], nextPageToken: null });
+  vi.mocked(api.playlistTracks).mockResolvedValue({
+    playlist, tracks: [track], skippedTrackCount: 1,
+  });
+  vi.mocked(api.play).mockResolvedValue(undefined);
+  render(<App />);
+  fireEvent.click(screen.getByRole("tab", { name: "Playlists" }));
+  fireEvent.change(screen.getByLabelText("Playlist name"), { target: { value: "chill" } });
+  fireEvent.click(screen.getByRole("button", { name: "Search" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Open playlist Chill mix" }));
+  await screen.findByText("Chill mix");
+  expect(api.searchPlaylists).toHaveBeenCalledTimes(1);
+  expect(api.playlistTracks).toHaveBeenCalledWith(expect.any(Number), playlist);
+  expect(screen.getByText("1 track is unavailable and was skipped.")).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "Play Example" }));
+  await waitFor(() => expect(api.play).toHaveBeenCalledTimes(1));
+  expect(screen.getByText("Starting audio...")).toBeTruthy();
+});
+
+test("playlist errors stay safe and do not show diagnostics", async () => {
+  vi.mocked(api.searchPlaylists).mockRejectedValue({ code: "source_unavailable", message: "SECRET" });
+  render(<App />);
+  fireEvent.click(screen.getByRole("tab", { name: "Playlists" }));
+  fireEvent.change(screen.getByLabelText("Playlist name"), { target: { value: "x" } });
+  fireEvent.click(screen.getByRole("button", { name: "Search" }));
+  await screen.findByText("Source unavailable. Check yt-dlp or try another track.");
+  expect(screen.queryByText("SECRET")).toBeNull();
 });
 
 test("controls use the active playback generation without replaying the track", async () => {

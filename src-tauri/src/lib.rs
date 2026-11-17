@@ -1,8 +1,9 @@
 mod playback;
 
 use fuzzy_application::{
-    AppError, Application, CancellationToken, ErrorCode, RequestOptions, ResolveTrackRequest,
-    SearchTracksRequest, SearchTracksResponse,
+    AppError, Application, CancellationToken, ErrorCode, PlaylistTracksRequest,
+    PlaylistTracksResponse, RequestOptions, ResolveTrackRequest, SearchPlaylistsRequest,
+    SearchPlaylistsResponse, SearchTracksRequest, SearchTracksResponse,
 };
 use fuzzy_soundcloud::SoundCloudClient;
 use serde::Serialize;
@@ -84,6 +85,7 @@ impl Default for PlaybackStatus {
 #[derive(Default)]
 struct Control {
     search: Operation,
+    playlists: Operation,
     playback: Operation,
     player: Option<playback::Player>,
     status: PlaybackStatus,
@@ -107,6 +109,7 @@ impl Control {
     fn close(&mut self) {
         self.closed = true;
         self.search.cancellation.cancel();
+        self.playlists.cancellation.cancel();
         self.playback.cancellation.cancel();
         self.player = None;
     }
@@ -168,6 +171,52 @@ impl Shell {
         let result = self.application.search_tracks(request, &options);
         let control = self.control.lock().map_err(|_| internal())?;
         if !control.search.current(generation) || control.closed {
+            return Err(cancelled());
+        }
+        result
+    }
+
+    fn search_playlists(
+        &self,
+        generation: u64,
+        request: SearchPlaylistsRequest,
+    ) -> Result<SearchPlaylistsResponse, AppError> {
+        let options = {
+            let mut control = self.control.lock().map_err(|_| internal())?;
+            if control.closed {
+                return Err(cancelled());
+            }
+            let options = control.playlists.begin(generation)?;
+            control.active += 1;
+            options
+        };
+        let _active = Active(self);
+        let result = self.application.search_playlists(request, &options);
+        let control = self.control.lock().map_err(|_| internal())?;
+        if !control.playlists.current(generation) || control.closed {
+            return Err(cancelled());
+        }
+        result
+    }
+
+    fn playlist_tracks(
+        &self,
+        generation: u64,
+        request: PlaylistTracksRequest,
+    ) -> Result<PlaylistTracksResponse, AppError> {
+        let options = {
+            let mut control = self.control.lock().map_err(|_| internal())?;
+            if control.closed {
+                return Err(cancelled());
+            }
+            let options = control.playlists.begin(generation)?;
+            control.active += 1;
+            options
+        };
+        let _active = Active(self);
+        let result = self.application.playlist_tracks(request, &options);
+        let control = self.control.lock().map_err(|_| internal())?;
+        if !control.playlists.current(generation) || control.closed {
             return Err(cancelled());
         }
         result
@@ -280,6 +329,41 @@ async fn cancel_search(
 }
 
 #[tauri::command]
+async fn search_playlists(
+    shell: tauri::State<'_, Arc<Shell>>,
+    generation: u64,
+    request: SearchPlaylistsRequest,
+) -> Result<SearchPlaylistsResponse, AppError> {
+    let shell = shell.inner().clone();
+    worker(move || shell.search_playlists(generation, request)).await
+}
+
+#[tauri::command]
+async fn playlist_tracks(
+    shell: tauri::State<'_, Arc<Shell>>,
+    generation: u64,
+    request: PlaylistTracksRequest,
+) -> Result<PlaylistTracksResponse, AppError> {
+    let shell = shell.inner().clone();
+    worker(move || shell.playlist_tracks(generation, request)).await
+}
+
+#[tauri::command]
+async fn cancel_playlists(
+    shell: tauri::State<'_, Arc<Shell>>,
+    generation: u64,
+) -> Result<(), AppError> {
+    let shell = shell.inner().clone();
+    worker(move || {
+        let mut control = shell.control.lock().map_err(|_| internal())?;
+        control.playlists.begin(generation)?;
+        control.playlists.cancellation.cancel();
+        Ok(())
+    })
+    .await
+}
+
+#[tauri::command]
 async fn play_track(
     shell: tauri::State<'_, Arc<Shell>>,
     generation: u64,
@@ -373,6 +457,9 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             search_tracks,
             cancel_search,
+            search_playlists,
+            playlist_tracks,
+            cancel_playlists,
             play_track,
             stop_playback,
             playback_status,

@@ -13,6 +13,13 @@ position/seek and volume through mpv JSON IPC. See
 [`tasks/playback-controls.md`](tasks/playback-controls.md) for verification and
 remaining limitations. Queue and persistence are not implemented in this slice.
 
+A dark Spotify-style shell also adds public SoundCloud **playlist search**:
+search playlists, open one and play its tracks through the same player. It uses
+the SoundCloud web API with an auto-discovered `client_id`, because `yt-dlp`
+cannot search playlists. See decision 0006 and
+[`tasks/playlist-search.md`](tasks/playlist-search.md). Saved playlists and a
+queue are not implemented.
+
 ## Project goals
 
 - Search by track title and author.

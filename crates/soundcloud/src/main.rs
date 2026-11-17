@@ -67,7 +67,17 @@ fn run() -> Result<(), String> {
                 .resolve_with_options(&input, &options)
                 .map_err(|e| e.to_string())?,
         ),
-        _ => return Err("Unknown command; use search or resolve".into()),
+        "playlists" => serde_json::to_value(
+            client
+                .search_playlists_with_options(&input, limit, &options)
+                .map_err(|e| e.to_string())?,
+        ),
+        "playlist" => serde_json::to_value(
+            client
+                .playlist_tracks_with_options(&input, &options)
+                .map_err(|e| e.to_string())?,
+        ),
+        _ => return Err("Unknown command; use search, playlists, playlist or resolve".into()),
     }
     .map_err(|e| e.to_string())?;
     println!(

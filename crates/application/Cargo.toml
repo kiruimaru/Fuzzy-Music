@@ -1,0 +1,12 @@
+[package]
+name = "fuzzy-application"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+fuzzy-soundcloud = { path = "../soundcloud" }
+serde = { version = "1", features = ["derive"] }
+
+[dev-dependencies]
+serde_json = "1"

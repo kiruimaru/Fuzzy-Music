@@ -4,9 +4,9 @@ Fuzzy Music is a university desktop music player project for Windows and Linux.
 The first release is intended to search public SoundCloud tracks and stream
 available audio without requiring users to obtain API keys manually.
 
-The repository includes a standalone Rust SoundCloud prototype and a typed
-application API. The Tauri 2 application with a React + TypeScript interface
-remains a next step.
+The repository includes a Rust SoundCloud adapter, a typed application API,
+and a minimal Tauri 2 + React/TypeScript shell for search, Play and Stop through
+mpv. See [desktop setup and verification](docs/shell-development.md).
 
 ## Project goals
 
@@ -29,17 +29,18 @@ first release:
 | yt-dlp | SoundCloud search, metadata, and stream discovery | Used by prototype |
 | Cargo, rustfmt, Clippy | Build, tests, formatting, and linting | Available |
 | Git and GitHub | Version control and Pull Request review | In use |
-| Tauri 2 | Commands and events between interface and Rust | Planned |
-| React, TypeScript, CSS | Search, library, and playback interface | Planned |
-| mpv | Audio playback, position, volume, and queue control | Planned |
+| Tauri 2 | Typed commands between interface and Rust | Search/Play/Stop implemented |
+| React, TypeScript, CSS | Search and minimal playback interface | Implemented |
+| mpv | Audio playback | Play/Stop implemented; other controls planned |
 | SQLite | Local favourites and settings | Planned |
 
 SoundCloud-specific code is isolated in `crates/soundcloud`. The planned
 frontend/Rust boundary uses explicit, source-agnostic contracts in
 [`docs/architecture/contracts.md`](docs/architecture/contracts.md); prototype
 types are not that boundary. `crates/application` implements typed search/resolve
-DTOs and safe errors without Tauri. See the contracts for worker/cancellation
-integration and the compilable `crates/application/examples/search.rs` example.
+DTOs and safe errors without Tauri. `src-tauri` dispatches source calls to blocking
+workers and owns cancellation and mpv. See the contracts and
+`crates/application/examples/search.rs` for the runtime-independent API.
 Team responsibilities are recorded in
 [`docs/team.md`](docs/team.md).
 
@@ -48,14 +49,17 @@ Team responsibilities are recorded in
 - `crates/soundcloud`: source adapter, extractor process control, and probe CLI.
 - `crates/application`: serializable search/resolve DTOs, safe errors, offline
   boundary tests, and a blocking-worker example.
+- `src-tauri`: Tauri commands, request control, and owned mpv playback.
+- `src`: minimal React + TypeScript interface and frontend tests.
+- `tests`: browser smoke tests with fixture IPC.
 - `scripts`: shared agent context checks and Windows extractor setup/probes.
 - `docs/architecture` and `docs/decisions`: contracts and durable decisions.
 - `docs/project-context.md`, `docs/ai-log.md`, and `tasks`: current state and
   contributor handoffs.
 - `.github`: issue and PR templates. Automated CI is not configured yet.
 
-Keep future Tauri commands above `crates/application`; the frontend must use
-the documented DTOs. Playback and persistence remain planned Rust modules.
+Keep Tauri commands above `crates/application`; the frontend must use
+the documented DTOs. Persistence and the full playback API remain planned.
 
 ## Quick start on Windows x64
 
@@ -103,9 +107,21 @@ bash scripts/test-ai-context.sh
 bash -n scripts/ai-context.sh scripts/test-ai-context.sh
 ```
 
-Tests run without SoundCloud access. Rust checks and context tests have passed
-locally on Windows and Linux; these are not CI results. Live connectivity,
-audio playback, and the Tauri shell require separate verification.
+Normal tests run without SoundCloud access. The source/API checks previously
+passed on Windows and Linux; the shell, frontend and live playback checks passed
+locally on Linux with the environment limits documented in
+[shell development](docs/shell-development.md). These are not CI results;
+Windows shell validation and human listening confirmation remain pending.
+
+For the desktop shell:
+
+```text
+npm ci
+npm run tauri -- dev
+npm test
+npm run test:ui
+npm run build
+```
 
 ## License
 

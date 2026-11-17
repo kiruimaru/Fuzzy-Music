@@ -24,16 +24,30 @@ foreach ($file in (Get-ChildItem -LiteralPath (Join-Path $root 'node_modules') -
     New-Item -ItemType Directory -Force (Split-Path -Parent $destination) | Out-Null
     Copy-Item -LiteralPath $file.FullName -Destination $destination
 }
-# Accompany the application with the exact working source and locked Rust sources.
+# Offer exact working source and locked Rust sources as a separate download.
 # No external runtime executable is redistributed in this archive.
-$source = Join-Path $stage 'source'
+$source = Join-Path $release 'Fuzzy Music 0.1.0-alpha.1 corresponding-source'
+if (Test-Path -LiteralPath $source) { throw 'Source staging exists; choose a fresh output directory.' }
 New-Item -ItemType Directory $source | Out-Null
 foreach ($name in @('Cargo.toml','Cargo.lock','package.json','package-lock.json','index.html','tsconfig.json','vite.config.ts','LICENSE','README.md','AGENTS.md')) {
     Copy-Item (Join-Path $root $name) $source
 }
-foreach ($name in @('crates','src','src-tauri','scripts','docs')) {
-    Copy-Item (Join-Path $root $name) $source -Recurse
+# Copy only tracked inputs: never recurse into dist, caches or runtime downloads.
+$tracked = & git -C $root ls-files
+if ($LASTEXITCODE) { throw 'Cannot enumerate source tree' }
+foreach ($name in $tracked) {
+    if ($name -match '^(crates|src|src-tauri|scripts|docs|tests|tasks|\.github)/' -or $name -in @('playwright.config.ts','.gitignore')) {
+        $destination = Join-Path $source $name
+        New-Item -ItemType Directory -Force (Split-Path -Parent $destination) | Out-Null
+        Copy-Item -LiteralPath (Join-Path $root $name) $destination
+    }
 }
+$commit = & git -C $root rev-parse HEAD
+$tree = & git -C $root rev-parse 'HEAD^{tree}'
+$dirty = @(& git -C $root status --porcelain --untracked-files=no)
+$provenance = [ordered]@{ commit=$commit; tree=$tree; dirty=($dirty.Count -gt 0); note='Tracked working files packaged; dirty=true means local edits differ from the recorded Git tree.'; executableSha256=(Get-FileHash (Join-Path $stage 'Fuzzy Music.exe')).Hash.ToLowerInvariant() }
+$provenance | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $source 'SOURCE-PROVENANCE.json') -Encoding UTF8
+$provenance | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $stage 'SOURCE-PROVENANCE.json') -Encoding UTF8
 $frontendSource = Join-Path $source 'frontend-dependencies'
 New-Item -ItemType Directory $frontendSource | Out-Null
 foreach ($name in @('react','react-dom','scheduler','@tauri-apps/api')) {
@@ -52,11 +66,12 @@ New-Item -ItemType Directory $config | Out-Null
 # Stable entry order/timestamps: same input bytes produce the same ZIP on .NET.
 Add-Type -AssemblyName System.IO.Compression
 Add-Type -AssemblyName System.IO.Compression.FileSystem
-$zipPath = "$stage.zip"
+foreach ($directory in @($stage,$source)) {
+$zipPath = "$directory.zip"
 $zip = [IO.Compression.ZipFile]::Open($zipPath, [IO.Compression.ZipArchiveMode]::Create)
 try {
-    foreach ($file in (Get-ChildItem -LiteralPath $stage -File -Recurse | Sort-Object FullName)) {
-        $name = $file.FullName.Substring($stage.Length + 1).Replace('\','/')
+    foreach ($file in (Get-ChildItem -LiteralPath $directory -File -Recurse | Sort-Object FullName)) {
+        $name = $file.FullName.Substring($directory.Length + 1).Replace('\','/')
         $entry = $zip.CreateEntry($name, [IO.Compression.CompressionLevel]::Optimal)
         $entry.LastWriteTime = [DateTimeOffset]::new(2026,11,11,0,0,0,[TimeSpan]::Zero)
         $input = $file.OpenRead(); $output = $entry.Open()
@@ -67,3 +82,6 @@ $sha = (Get-FileHash -LiteralPath $zipPath -Algorithm SHA256).Hash.ToLowerInvari
 [IO.File]::WriteAllText("$zipPath.sha256", "$sha  $([IO.Path]::GetFileName($zipPath))`n", [Text.Encoding]::ASCII)
 Get-Item -LiteralPath $zipPath | Select-Object FullName,Length
 $sha
+}
+& (Join-Path $PSScriptRoot 'test-windows-package.ps1') -OutputDirectory $release | Format-List
+if (-not $?) { throw 'Package assertions failed' }

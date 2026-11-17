@@ -24,9 +24,19 @@ jobs:
       - run: powershell -NoProfile -File scripts/package-windows.ps1
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: fuzzy-music-windows-alpha
+          name: fuzzy-music-windows-alpha-portable
+          compression-level: 0
           path: |
-            artifacts/windows-alpha/*.zip
-            artifacts/windows-alpha/*.sha256
+            artifacts/windows-alpha/*Windows x64.zip
+            artifacts/windows-alpha/*Windows x64.zip.sha256
+          if-no-files-found: error
+          retention-days: 14
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: fuzzy-music-windows-alpha-corresponding-source
+          compression-level: 0
+          path: |
+            artifacts/windows-alpha/*corresponding-source.zip
+            artifacts/windows-alpha/*corresponding-source.zip.sha256
           if-no-files-found: error
           retention-days: 14

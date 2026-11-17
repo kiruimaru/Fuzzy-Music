@@ -50,7 +50,8 @@ response formats inside the source adapter.
 - Windows alpha packaging/discovery is in local `feat/windows-alpha`; see
   `../tasks/windows-alpha.md`, decision 0005 and `windows-alpha.md`. Live portable
   search/Playing/Stop passed with Windows-only PATH and different cwd. Public
-  ZIP now supplies application/locked Rust sources and npm notices; external
+  Portable ZIP supplies npm notices; a separate matching corresponding-source
+  artifact supplies application/locked Rust sources with Git/executable provenance. External
   mpv/yt-dlp are acquired directly via digest-verified first-run bootstrap because
   exact transitive mpv source was not available as an upstream bundle. Clean
   Windows runtime verification remains external. Linux alpha is assigned in #19.

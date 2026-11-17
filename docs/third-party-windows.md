@@ -1,9 +1,13 @@
 # Windows alpha distribution and provenance
 
-The distributed alpha ZIP contains Fuzzy Music, its GPL-3.0 license, exact
-application sources/build scripts/lockfiles in `source/`, locked Rust dependency
-sources and licenses in `source/vendor/`, and npm package notices in `licenses/npm/`.
-Build from `source/` using the Windows prerequisites in README: `npm ci`, then
+The portable alpha ZIP contains Fuzzy Music, its GPL-3.0 license and npm package
+notices in `licenses/npm/`. The separate **corresponding-source** download on the
+same Actions run contains exact application sources/build scripts/lockfiles,
+locked Rust dependency sources/licenses in `vendor/`, and frontend runtime sources.
+Both archives carry matching SOURCE-PROVENANCE.json (Git commit/tree, dirty flag,
+executable SHA256); each has its own checksum. Distributors must keep the matching
+source download available alongside the executable, not just link to a moving branch.
+Build from the extracted source using the Windows prerequisites in README: `npm ci`, then
 `npm run tauri -- build --no-bundle`. The vendored Cargo configuration supports
 offline Rust dependency resolution. Node build tools are acquired using the lockfile.
 WebView2 is a separately installed Microsoft runtime, not included in this ZIP.

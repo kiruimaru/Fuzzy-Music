@@ -1,5 +1,17 @@
 # AI Work Log
 
+## 2026-11-17 | Agent: OpenCode | Task: windows-alpha-download-size
+
+Measured old ZIP entries: 81.46 MB compressed, 556.97 MB unpacked, dominated by
+547.40 MB source/vendor. Split portable and matching corresponding-source ZIPs,
+separate Actions uploads, per-archive checksums and Git/executable provenance.
+Source copy uses tracked inputs, excluding build/runtime output. Added meaningful
+package entry/checksum assertions; both passed. Local portable 2.89 MB vs 81.46 MB
+(96.5% reduction), same optimized EXE. Fresh runtime setup and live GUI smoke
+passed search/Playing/system-proxy/Stop/exit without developer PATH or overrides;
+zero new consoles. Runtime downloads and installed bytes documented separately.
+No clean-machine or human listening claim; existing WebView2 exit warning remains.
+
 ## 2026-11-17 | Agent: OpenCode | Task: windows-alpha-distribution
 
 Preserved alpha/discovery and hidden-console changes. Inspected exact upstream

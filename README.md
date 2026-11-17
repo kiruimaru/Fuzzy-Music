@@ -66,6 +66,9 @@ the documented DTOs. Persistence and the full playback API remain planned.
 For the portable alpha artifact and first-run runtime setup, see
 [Windows alpha](docs/windows-alpha.md). This is the search/Play/Stop slice,
 not the full MVP. Clean-machine verification remains external.
+Choose the **portable** artifact for the small user download; matching GPL
+application and vendored dependency sources are a separate **corresponding-source**
+artifact on the same build, with checksums and Git/executable provenance.
 
 Install Git, Rust stable, and Microsoft C++ Build Tools with Windows SDK.
 From the repository root:

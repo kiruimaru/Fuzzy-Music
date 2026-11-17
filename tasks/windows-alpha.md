@@ -1,5 +1,24 @@
 # Windows portable alpha
 
+## Smaller downloads (2026-11-17)
+
+PR #20 remains open; clean starting worktree, fresh origin/main inspected.
+Old local ZIP measured 81,459,498 compressed / 556,969,597 unpacked bytes:
+source alone 547,398,612 unpacked, 74,198,870 compressed entry bytes;
+EXE 9,180,160 unpacked / 2,762,493 compressed, notices 345,902 / 94,012.
+Split packaging measured portable 2,888,036 / 9,572,175 bytes; source
+78,264,617 / 547,435,955 bytes (later docs/provenance may shift sizes).
+No compiler change justified: existing optimized EXE already compresses to 2.76 MB.
+Separate Actions uploads with outer compression disabled, SHA256 sidecars,
+Git tree/commit/dirty/executable provenance and tracked-only source copy avoid
+recursive build/runtime caches. Package assertions verify both archive contents.
+Fresh pinned runtime setup passed. Portable live GUI smoke (Windows-only PATH,
+different cwd, no dependency/proxy env) returned ten results, Playing via system
+proxy, Stop/exit; 688 console samples, 117 active extractor samples, zero new
+consoles. Existing WebView2 exit warning 1412 remains; no listening/clean-host claim.
+Tools measured 185,836,978 bytes including retained 34,181,485-byte mpv archive;
+yt-dlp download 23,575,744 bytes. No binaries/vendor archives committed.
+
 Base origin/main faa334a; #17/#18 verified merged. Separate worktree/branch
 feat/windows-alpha; previous GUI/review worktrees preserved. GitHub active user
 verified Maroi9p. User subsequently authorized commit/push/PR; no release/tag.

@@ -47,6 +47,8 @@ response formats inside the source adapter.
 
 ## Known state
 
+- AI context assembly has offline regression coverage in
+  `scripts/test-ai-context.sh`; see `tasks/ai-context-11.md` for scope and limits.
 - The repository and local Rust environment were prepared.
 - A Windows Rust prototype reportedly completed SoundCloud search, stream
   discovery, timeout handling, and cancellation checks.

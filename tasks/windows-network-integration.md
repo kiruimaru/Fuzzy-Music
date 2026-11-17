@@ -57,3 +57,12 @@ Publication is authorized; use Maroi9p identity exclusively. GitHub API verified
 login Maroi9p, id 134836326 before publication. Non-Windows compilation uses no
 Windows API; Linux runtime was not rerun for this follow-up. Frontend is unchanged;
 the frontend/browser/native build results above are the prior checks of this diff.
+
+## Publication
+
+- PR: https://github.com/kiruimaru/Fuzzy-Music/pull/18; review requested from kiruimaru.
+- Base: `feat/issue-14-tauri-shell` (#17); head: `feat/windows-network-integration`.
+- Implementation commit: `c6bfb1a`; GitHub confirmed both author and committer
+  login `Maroi9p`. Local author/committer use the required noreply identity above.
+- Pre-publication Rust tests (23 passed, 2 ignored), fmt, strict Clippy and
+  whitespace checks passed again. No merges performed; #14 remains open.

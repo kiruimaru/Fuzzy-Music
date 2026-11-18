@@ -18,6 +18,18 @@ establish release readiness or close MVP issues.
 - Publish approvals against the reviewed commit IDs, then push the combined
   main history without rewriting or deleting contributor branches.
 
+## Publication outcome
+
+- Both PRs received APPROVED reviews against their original reviewed heads.
+- PR #20 merged as `1d9cd8e`; PR #23 merged as `ea2f2d5`.
+- Combined implementation and review handoff pushed to main as `5e47cb8`;
+  the primary checkout was fast-forwarded to the same commit.
+- Contributor branches were preserved; no open PRs remained after integration.
+- Combined Windows workflow was dispatched for `5e47cb8`:
+  https://github.com/kiruimaru/Fuzzy-Music/actions/runs/44389261965
+  It was running Rust tests at the final status check; no Windows success
+  result or clean-machine runtime acceptance is claimed.
+
 ## Verification
 
 - Combined locked workspace/all-target Rust tests: 44 passed, 4 ignored.

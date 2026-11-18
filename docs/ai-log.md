@@ -11,6 +11,8 @@ Approve and integrate PRs #20/#23 as explicitly requested after manual testing.
 - Combined both contributor histories and preserved earlier review evidence.
 - Resolved shell module/player conflicts, retaining mpv IPC and dependency errors.
 - Updated current README, contracts and project context to match implementation.
+- Published APPROVED reviews for both original heads; GitHub marks both PRs
+  merged. Pushed combined history through `5e47cb8` to main and synced locally.
 - Recorded accepted follow-ups in `tasks/pr20-pr23-integration.md`; no known
   cache, worker or HTTP lifecycle finding is represented as fixed.
 
@@ -21,7 +23,8 @@ Approve and integrate PRs #20/#23 as explicitly requested after manual testing.
 - Combined native Tauri debug no-bundle build passed.
 - Original native run: no observed crash/OOM/journal error; approximately
   537 MiB at 12.5 minutes, 677 MiB peak across the complete service.
-- Combined Windows/clean-machine runtime verification remains pending.
+- Combined Windows workflow 44389261965 is running against `5e47cb8`;
+  clean-machine runtime verification remains pending.
 
 ### Decisions
 
@@ -34,7 +37,8 @@ Approve and integrate PRs #20/#23 as explicitly requested after manual testing.
 
 ### Next action
 
-Publish approvals and main integration; continue accepted follow-ups before release.
+Check the combined Windows workflow result and continue accepted resource/lifecycle
+follow-ups before release. Publication details are in the integration task.
 
 ## 2026-11-17 | Agent: OpenCode | Task: windows-alpha-download-size
 

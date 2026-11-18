@@ -4,10 +4,17 @@ use std::{fmt, time::Duration};
 pub enum SoundCloudError {
     InvalidInput(String),
     Cancelled,
-    TimedOut { timeout: Duration },
+    TimedOut {
+        timeout: Duration,
+    },
     Process(String),
-    ExtractorFailed { status: String, details: String },
+    ExtractorFailed {
+        status: String,
+        details: String,
+    },
     InvalidResponse(String),
+    /// Network/HTTP failure from the playlist API. The text is diagnostics only.
+    Network(String),
 }
 
 impl fmt::Display for SoundCloudError {
@@ -16,6 +23,7 @@ impl fmt::Display for SoundCloudError {
             Self::InvalidInput(message)
             | Self::Process(message)
             | Self::InvalidResponse(message) => f.write_str(message),
+            Self::Network(message) => write!(f, "SoundCloud network request failed: {message}"),
             Self::Cancelled => f.write_str("SoundCloud request cancelled"),
             Self::TimedOut { timeout } => write!(
                 f,

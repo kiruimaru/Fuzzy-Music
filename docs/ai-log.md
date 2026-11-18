@@ -394,3 +394,69 @@ continue work without relying on one chat session.
 
 Create a task branch, commit this foundation, open a PR, and then implement
 the minimal Tauri shell.
+
+## 2026-11-18 — Playlist preparation retry
+
+- Added guarded, delayed retry when preparing the next playlist stream fails.
+- Checks: npm test (10 passed); npm run build passed.
+- Gapless transitions remain unimplemented; see tasks/playlist-transitions.md for the next steps and limitations.
+
+## 2026-11-18 — mpv playlist transitions
+
+- Append the resolved next stream to the owned mpv process; enable gapless audio and playlist prefetch and report completed transitions to the UI.
+- Fixture and frontend tests cover automatic advancement; real mpv/SoundCloud listening and transition timing remain outstanding. See tasks/playlist-transitions.md.
+
+## 2026-11-18 — Playlist lookahead
+
+- Resolve up to two following playlist tracks in the background, cache temporary links with bounded lifetime, reuse them for manual and automatic selection, and cancel work on replacement/stop.
+- Checks: 12 Rust shell tests and 12 frontend tests pass; shell Clippy passes. Live speed and audio buffering remain to be measured.
+
+## 2026-11-18 — Bidirectional playlist lookahead
+
+- Expand temporary stream-link caching to three neighbours in each direction, prioritized by distance, and retain still-valid links for manual navigation.
+- Checks: 12 shell tests, 13 frontend tests, and shell Clippy pass; real timing remains to be checked.
+
+## 2026-11-18 — Twenty-track lookahead
+
+- Expanded bounded link lookahead to twenty nearest neighbours; tests cover a large playlist and both directions.
+- Tests: 12 shell and 14 frontend passed; shell Clippy passed. A live probe returned HLS; audio-byte caching in RAM remains unimplemented and unverified.
+
+## 2026-11-18 — Parallel lookahead preparation
+
+- Resolve up to four neighbouring stream links concurrently, retaining completed results while cancelling obsolete work.
+- Shell tests (13 passed) include concurrent fixture timing; Clippy passes. Audio prebuffering and twenty-track rapid-switch acceptance remain outstanding.
+
+## 2026-11-18 — RAM audio startup cache
+
+- Added bounded in-memory HLS startup segments, loopback delivery to mpv, proxy bypass for loopback, and retained link reuse for repeated selection. Unsupported HLS forms fall back to normal streaming.
+- Shell tests include manifest rewriting, cached segment delivery and clearing; real SoundCloud listening and latency still need verification.
+- A live SoundCloud HLS stream with an initialization segment was cached and successfully played through mpv with null audio output. Audible performance and rapid switching across a playlist still require user testing.
+
+## 2026-11-18 — Expanded RAM lookahead
+
+- Expanded lookahead to forty neighbours and bounded audio cache to 6 MiB per track (41 tracks maximum); publish the first three segments while later segments are fetched.
+- Check real-world memory use and switching after prefetch; allocation depends on playlist and stream size rather than being padded to a target.
+
+## 2026-11-18 — Faster lookahead scheduling
+
+- Use eight continuously scheduled workers and reuse cached links when audio preloading needs another attempt. Check cancellation between segments and retain at most 3 MiB per track.
+- Offline coverage includes a slow-track scheduling fixture; live SoundCloud/mpv and user-measured switching remain separate checks.
+
+## 2026-11-18 — Preserve playlist preparation across manual skips
+
+- Keep an active playlist lookahead running across manual track changes; reuse links and audio until the signed expiry safety margin or 15-minute cap. Unknown expiry retains short fallback lifetimes.
+- Fixture checks cover in-flight prefetch across a skip, repeated back-and-forth link reuse, and signed expiration; listening and latency on the user's playlist remain to be checked.
+
+## 2026-11-18 — Thirty-minute cache lifetime
+
+- Increased the upper bound for signed links and HLS audio from 15 to 30 minutes, preserving expiry checks and the safety margin.
+- Added boundary coverage for both the old and new limits; user confirmed the preceding playback behavior.
+
+## 2026-11-19 — Lookahead resource limits
+
+- Investigated a user report of system-wide lag and FPS drops during long playlist sessions; live probes showed signed links stay valid for about two hours, so the 30-minute cap caused periodic storms of up to 40 extractor launches plus hundreds of segment downloads.
+- Raised the cache cap to 55 minutes, dropped expired entries on lookup, and bounded extractor launches to 16 per cycle with leftovers deferred to the next 45-second cycle.
+- Limited RAM audio warming to the 3 nearest neighbours; the rest of the 40-track lookahead stores links only, and mpv demuxer caches now have explicit byte caps.
+- Updated the freshness boundary test to straddle the new 3300-second cap; decision recorded in `docs/decisions/0008-lookahead-resource-limits.md`.
+- Verification: cargo fmt clean; `cargo test --workspace --all-targets --locked` all passed; frontend untouched.
+

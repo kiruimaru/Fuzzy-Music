@@ -55,6 +55,15 @@ response formats inside the source adapter.
   mpv/yt-dlp are acquired directly via digest-verified first-run bootstrap because
   exact transitive mpv source was not available as an upstream bundle. Clean
   Windows runtime verification remains external. Linux alpha is assigned in #19.
+- Local branch adds a dark Spotify-style shell and public SoundCloud playlist
+  search (tabs, playlist grid, playlist track view) on top of the playback
+  controls slice. See decision 0006 and `../tasks/playlist-search.md`. Saved
+  playlists, queue and issue closure remain out of scope. Not published.
+
+- Local branch `feat/playback-controls` adds a basic dark player panel and mpv
+  JSON IPC pause/resume, seek and volume; see `../tasks/playback-controls.md`
+  and decision 0005. Queue and persisted settings remain unimplemented. This
+  work is not published and does not close issue #22.
 
 - AI context assembly has offline regression coverage in
   `scripts/test-ai-context.sh`; see `tasks/ai-context-11.md` for scope and limits.

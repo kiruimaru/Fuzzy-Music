@@ -6,8 +6,32 @@ mod control;
 mod error;
 pub mod network;
 mod process;
+mod web;
 pub use control::{CancellationToken, RequestOptions};
 pub use error::SoundCloudError;
+
+#[derive(Debug, Serialize)]
+pub struct Playlist {
+    pub id: String,
+    pub title: String,
+    pub author: Option<String>,
+    pub artwork_url: Option<String>,
+    pub track_count: Option<u32>,
+    pub duration_seconds: Option<f64>,
+    pub webpage_url: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct PlaylistSearchResults {
+    pub query: String,
+    pub playlists: Vec<Playlist>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct PlaylistTracks {
+    pub playlist: Playlist,
+    pub tracks: Vec<Track>,
+}
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Track {
@@ -69,9 +93,10 @@ impl SoundCloudClient {
                 "Search query must not be empty".into(),
             ));
         }
-        if !(1..=20).contains(&limit) {
+        // `yt-dlp` follows `scsearch` pagination, so larger pages are allowed.
+        if !(1..=100).contains(&limit) {
             return Err(SoundCloudError::InvalidInput(
-                "For this probe, limit must be between 1 and 20".into(),
+                "Track limit must be between 1 and 100".into(),
             ));
         }
         let target = format!("scsearch{limit}:{query}");
@@ -97,6 +122,55 @@ impl SoundCloudClient {
 
     pub fn resolve(&self, track_url: &str) -> Result<ResolvedStream, SoundCloudError> {
         self.resolve_with_options(track_url, &RequestOptions::default())
+    }
+
+    pub fn search_playlists(
+        &self,
+        query: &str,
+        limit: usize,
+    ) -> Result<PlaylistSearchResults, SoundCloudError> {
+        self.search_playlists_with_options(query, limit, &RequestOptions::default())
+    }
+
+    pub fn search_playlists_with_options(
+        &self,
+        query: &str,
+        limit: usize,
+        options: &RequestOptions,
+    ) -> Result<PlaylistSearchResults, SoundCloudError> {
+        let query = query.trim();
+        if query.is_empty() {
+            return Err(SoundCloudError::InvalidInput(
+                "Search query must not be empty".into(),
+            ));
+        }
+        if !(1..=50).contains(&limit) {
+            return Err(SoundCloudError::InvalidInput(
+                "Playlist limit must be between 1 and 50".into(),
+            ));
+        }
+        Ok(PlaylistSearchResults {
+            query: query.into(),
+            playlists: web::search(options, query, limit, self.network.as_ref())?,
+        })
+    }
+
+    pub fn playlist_tracks(&self, playlist_url: &str) -> Result<PlaylistTracks, SoundCloudError> {
+        self.playlist_tracks_with_options(playlist_url, &RequestOptions::default())
+    }
+
+    pub fn playlist_tracks_with_options(
+        &self,
+        playlist_url: &str,
+        options: &RequestOptions,
+    ) -> Result<PlaylistTracks, SoundCloudError> {
+        if !is_soundcloud_url(playlist_url) || !playlist_url.contains("/sets/") {
+            return Err(SoundCloudError::InvalidInput(
+                "Expected an HTTPS SoundCloud playlist URL".into(),
+            ));
+        }
+        let (playlist, tracks) = web::playlist(options, playlist_url, self.network.as_ref())?;
+        Ok(PlaylistTracks { playlist, tracks })
     }
 
     pub fn resolve_with_options(
@@ -169,6 +243,26 @@ impl SoundCloudClient {
         }
         serde_json::from_slice(&output.stdout).map_err(|e| {
             SoundCloudError::InvalidResponse(format!("Extractor returned invalid JSON: {e}"))
+        })
+    }
+
+    /// Fast metadata-only search using the same web transport as playlists.
+    /// The extractor remains available for probes and audio resolution.
+    pub fn search_web_with_options(
+        &self,
+        query: &str,
+        limit: usize,
+        options: &RequestOptions,
+    ) -> Result<SearchResults, SoundCloudError> {
+        let query = query.trim();
+        if query.is_empty() || !(1..=100).contains(&limit) {
+            return Err(SoundCloudError::InvalidInput(
+                "Expected a query and limit 1..100".into(),
+            ));
+        }
+        Ok(SearchResults {
+            query: query.into(),
+            tracks: web::search_tracks(options, query, limit, self.network.as_ref())?,
         })
     }
 }

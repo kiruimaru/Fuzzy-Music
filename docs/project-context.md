@@ -1,7 +1,7 @@
 # Fuzzy Music Project Context
 
-**Last reviewed:** 2026-11-17  
-**Status:** source/API merged; shell PR #17 open; Windows network follow-up validated locally
+**Last reviewed:** 2026-11-19
+**Status:** source/API, shell #17 and Windows network #18 merged; PRs #20/#23 need review fixes
 
 ## Product
 
@@ -47,6 +47,13 @@ response formats inside the source adapter.
 
 ## Known state
 
+- PRs #20 (Windows alpha) and #23 (playback controls, public playlists and
+  transitions) were reviewed at heads `82bafc8` and `cfa6c69`. Their normal
+  Rust/frontend checks pass, but additional reproductions expose cache limits,
+  worker ownership, HTTP cancellation/deadlines, Linux release tool discovery
+  and missing-runtime UI guidance defects. See
+  `../tasks/pr-review-2026-11-19.md` and its regression patches.
+  These PRs remain open; #20 was explicitly deferred by its author.
 - AI context assembly has offline regression coverage in
   `scripts/test-ai-context.sh`; see `tasks/ai-context-11.md` for scope and limits.
 - The repository and local Rust environment were prepared.
@@ -101,9 +108,10 @@ PR #12 (source), PR #15 (application API, retargeted to main), and PR #13
 (context checks) are merged into main. The journal conflict in #13 was resolved
 by preserving both histories. Old source branches need no separate code merge:
 their implementation is already integrated, including the later guide edits.
-Issue #14 implementation is in `feat/issue-14-tauri-shell`, with task context
-`../tasks/tauri-shell-14.md`. Next acceptance work is contributor contract review,
-review of the Windows network follow-up and release/tool packaging decisions.
+Issue #14 shell PR #17 and Windows network PR #18 are merged into main at
+`faa334a`. Their task contexts retain platform/manual acceptance limitations.
+Next work is resolving the #20/#23 review findings, contributor contract review,
+and release/tool packaging decisions.
 
 1. Confirm source connectivity and keep the source adapter isolated.
 2. Create the minimal Tauri application and search states.

@@ -1,5 +1,80 @@
 # AI Work Log
 
+## 2026-11-19 | Agent: Codex | Task: pr23-manual-test-launch
+
+### Goal
+
+Open the reviewed PR #23 for the user's manual playback and playlist testing.
+
+### Changed
+
+- Built the original PR head in a separate snapshot and launched a standalone
+  native window as transient user service `fuzzy-music-pr23.service`.
+- Enabled service memory accounting and process-local rendering/proxy settings.
+- Recorded launch evidence in `tasks/pr-review-2026-11-19.md`.
+
+### Checks
+
+- Native debug no-bundle build: passed.
+- Direct SoundCloud HTTP check: timed out; existing local proxy: HTTP 200.
+- Service running and native window mapped/visible: confirmed.
+
+### Decisions
+
+- Test the original reviewed implementation; no review fixes applied.
+
+### Open questions
+
+- User playback results and longer-session memory behaviour remain pending.
+
+### Next action
+
+Collect the user's observations and inspect service memory/processes after testing.
+
+## 2026-11-19 | Agent: Codex | Task: pr-review-2026-11-19
+
+### Goal
+
+Update local main and review all open PRs requesting owner review, focusing on
+the reported playlist memory problem.
+
+### Changed
+
+- Fast-forwarded main to `faa334a`; reviewed #23 `cfa6c69` and #20 `82bafc8`.
+- Recorded findings and generated diagnostic patches in
+  `tasks/pr-review-2026-11-19.md` and adjacent regression patches.
+- Updated project context to reflect merged #17/#18 and remaining PR blockers.
+- No implementation changes, commits, external messages, PR approvals or merges.
+
+### Checks
+
+- Original PR #23: 40 Rust tests passed / 4 ignored, 15 frontend tests,
+  four Chromium fixture tests, strict Clippy, rustfmt and frontend build passed.
+- Original PR #20: 27 Rust tests passed / 2 ignored, five frontend tests,
+  two Chromium fixture tests, strict Clippy, rustfmt and frontend build passed.
+- PR #23 real mpv with local WAV and null output: controls and EOF replay passed.
+- Four added #23 regressions failed: retained audio bound, manual warm
+  concurrency, HTTP cancellation latency and shared operation deadline.
+- Added #20 UI regression and Linux release-discovery harness failed.
+- Both generated patches pass apply checks on their original heads; repository
+  context smoke, Bash syntax and local diff whitespace checks passed.
+- Windows packaging/GUI, live SoundCloud and whole-system memory: not run.
+
+### Decisions
+
+- Both PRs need changes. Cache growth is bounded at 123 MiB of retained audio,
+  but the stated four-track budget is unenforced and manual warm concurrency
+  is unbounded. No unlimited retained-cache leak or system OOM was established.
+
+### Open questions
+
+- Windows clean-machine acceptance and actual HLS timing/memory remain unverified.
+
+### Next action
+
+Fix #23 resource/lifecycle defects and #20 Linux/runtime-guidance regressions;
+use the saved patches to verify fixes before requesting approval.
+
 ## 2026-11-17 | Agent: OpenCode | Task: windows-network-integration
 
 Implemented immutable native Windows manual proxy detection and shared explicit

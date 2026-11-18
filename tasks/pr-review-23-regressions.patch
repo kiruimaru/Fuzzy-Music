@@ -1,0 +1,215 @@
+--- a/src-tauri/src/audio_cache.rs
++++ b/src-tauri/src/audio_cache.rs
+@@ -364,6 +364,63 @@
+ mod tests {
+     use super::*;
+     #[test]
++    fn review_audio_cache_remains_at_current_plus_three_after_skips() {
++        let source = TcpListener::bind("127.0.0.1:0").unwrap();
++        let address = source.local_addr().unwrap();
++        let expires = std::time::SystemTime::now()
++            .duration_since(std::time::UNIX_EPOCH)
++            .unwrap()
++            .as_secs()
++            + 7200;
++        let server = std::thread::spawn(move || {
++            for connection in source.incoming().take(8 * 4) {
++                let mut connection = connection.unwrap();
++                let mut request = [0u8; 2048];
++                let n = connection.read(&mut request).unwrap();
++                let manifest = format!(
++                    "#EXTM3U\n#EXTINF:1,\na.ts?expires={expires}\n#EXTINF:1,\nb.ts?expires={expires}\n#EXTINF:1,\nc.ts?expires={expires}\n#EXT-X-ENDLIST\n"
++                );
++                let data = if request[..n].starts_with(b"GET /list") {
++                    manifest.into_bytes()
++                } else {
++                    vec![1u8; 1024 * 1024]
++                };
++                write!(
++                    connection,
++                    "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
++                    data.len()
++                )
++                .unwrap();
++                connection.write_all(&data).unwrap();
++            }
++        });
++        let cache = AudioCache::new(&fuzzy_application::NetworkPolicy::default()).unwrap();
++        for index in 0..8 {
++            cache.warm(
++                &format!("track{index}"),
++                &format!("http://{address}/list?expires={expires}"),
++            );
++        }
++        server.join().unwrap();
++        let state = cache.state.lock().unwrap();
++        let payload: usize = state
++            .entries
++            .iter()
++            .flat_map(|entry| entry.files.iter())
++            .filter(|(path, _)| !path.ends_with(".m3u8"))
++            .map(|(_, data)| data.len())
++            .sum();
++        eprintln!(
++            "review: {} retained tracks, {} MiB audio",
++            state.entries.len(),
++            payload / 1024 / 1024
++        );
++        assert!(
++            state.entries.len() <= 4,
++            "current + three neighbours exceeded"
++        );
++    }
++    #[test]
+     fn signed_links_are_reused_with_a_safety_margin_and_unsigned_links_expire() {
+         let now = std::time::SystemTime::now()
+             .duration_since(std::time::UNIX_EPOCH)
+--- a/src-tauri/src/lib.rs
++++ b/src-tauri/src/lib.rs
+@@ -897,6 +897,65 @@
+     }
+ 
+     #[test]
++    fn review_manual_skips_share_a_global_audio_warm_limit() {
++        use std::io::{Read, Write};
++        let fixture = Fixture::new();
++        let mut shell = fixture.shell();
++        shell.play(1, request("ok")).unwrap();
++        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
++        let url = format!("http://{}/list", listener.local_addr().unwrap());
++        let (started_tx, started_rx) = std::sync::mpsc::channel();
++        let server = std::thread::spawn(move || {
++            let workers: Vec<_> = listener.incoming().take(12).map(|connection| {
++                let started_tx = started_tx.clone();
++                std::thread::spawn(move || {
++                    let mut connection = connection.unwrap();
++                    let mut buffer = [0u8; 2048];
++                    connection.read(&mut buffer).unwrap();
++                    started_tx.send(()).unwrap();
++                    std::thread::sleep(Duration::from_millis(800));
++                    let body = "#EXTM3U\n#EXT-X-ENDLIST\n";
++                    let _ = write!(connection, "HTTP/1.1 200 OK\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}", body.len());
++                })
++            }).collect();
++            for worker in workers {
++                worker.join().unwrap();
++            }
++        });
++        Arc::get_mut(&mut shell).unwrap().audio_cache = Some(Arc::new(
++            audio_cache::AudioCache::new(&fuzzy_application::NetworkPolicy::default()).unwrap(),
++        ));
++        {
++            let mut control = shell.control.lock().unwrap();
++            let mut resolved = control.cached_streams[0].1.clone();
++            resolved.stream_url = url;
++            for index in 0..12 {
++                control.cached_streams.push((
++                    request(&format!("review{index}")).track_url,
++                    resolved.clone(),
++                    Instant::now(),
++                ));
++            }
++        }
++        for index in 0..12 {
++            shell
++                .play(index + 2, request(&format!("review{index}")))
++                .unwrap();
++        }
++        let mut parallel = 0;
++        while started_rx.recv_timeout(Duration::from_millis(200)).is_ok() {
++            parallel += 1;
++        }
++        shell.shutdown();
++        server.join().unwrap();
++        eprintln!("review: {parallel} simultaneous manifest downloads from manual skips");
++        assert!(
++            parallel <= 8,
++            "manual playback bypassed the lookahead worker limit"
++        );
++    }
++
++    #[test]
+     fn replacement_and_out_of_order_requests_are_cancelled() {
+         let mut operation = Operation::default();
+         let first = operation.begin(1).unwrap();
+--- a/crates/soundcloud/src/web.rs
++++ b/crates/soundcloud/src/web.rs
+@@ -468,6 +468,78 @@
+ mod tests {
+     use super::*;
+ 
++    fn review_slow_server(
++        delay: std::time::Duration,
++        requests: usize,
++    ) -> (String, std::thread::JoinHandle<()>) {
++        use std::io::{Read, Write};
++        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
++        let url = format!("http://{}", listener.local_addr().unwrap());
++        let worker = std::thread::spawn(move || {
++            for connection in listener.incoming().take(requests) {
++                let mut connection = connection.unwrap();
++                let mut request = [0u8; 2048];
++                connection.read(&mut request).unwrap();
++                std::thread::sleep(delay);
++                let _ = connection.write_all(
++                    b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\n{}",
++                );
++            }
++        });
++        (url, worker)
++    }
++
++    #[test]
++    fn review_cancellation_interrupts_an_inflight_http_request() {
++        use std::time::Duration;
++        let (url, server) = review_slow_server(Duration::from_millis(800), 1);
++        let options = RequestOptions {
++            timeout: Duration::from_secs(2),
++            ..Default::default()
++        };
++        let cancellation = options.cancellation.clone();
++        let canceller = std::thread::spawn(move || {
++            std::thread::sleep(Duration::from_millis(50));
++            cancellation.cancel();
++        });
++        let http = Http::new(&options, Some(&crate::network::NetworkPolicy::default())).unwrap();
++        let started = Instant::now();
++        let result = http.get(&url, &options);
++        let elapsed = started.elapsed();
++        canceller.join().unwrap();
++        server.join().unwrap();
++        assert!(matches!(result, Err(SoundCloudError::Cancelled)));
++        eprintln!("review: cancellation at 50ms returned after {elapsed:?}");
++        assert!(
++            elapsed < Duration::from_millis(300),
++            "cancelled request kept blocking"
++        );
++    }
++
++    #[test]
++    fn review_http_calls_share_the_operation_deadline() {
++        use std::time::Duration;
++        let (url, server) = review_slow_server(Duration::from_millis(150), 2);
++        let options = RequestOptions {
++            timeout: Duration::from_millis(250),
++            ..Default::default()
++        };
++        let http = Http::new(&options, Some(&crate::network::NetworkPolicy::default())).unwrap();
++        let started = Instant::now();
++        http.get(&url, &options).unwrap();
++        let second = http.get(&url, &options);
++        let elapsed = started.elapsed();
++        server.join().unwrap();
++        eprintln!(
++            "review: two HTTP calls completed after {elapsed:?}, budget {:?}",
++            options.timeout
++        );
++        assert!(
++            matches!(second, Err(SoundCloudError::TimedOut { .. })),
++            "operation exceeded timeout and still succeeded"
++        );
++    }
++
+     #[test]
+     fn client_id_is_found_in_minified_javascript() {
+         let source = r#"var a={client_id:"0123456789abcdef0123456789abcdef",x:1}"#;

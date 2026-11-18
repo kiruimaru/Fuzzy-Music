@@ -68,7 +68,8 @@ type SearchTracksResponse = {
 The command must expose loading, empty, error, and cancellation states. A
 stale response must not overwrite a newer search.
 
-Limit defaults to 10 and must be 1..20. `nextPageToken` is always null:
+Track limits must be 1..100. The extractor application method defaults to 10;
+the production web-search method and UI default to 30. `nextPageToken` is always null:
 pagination is unsupported, not an indication of all available source results.
 
 ## Resolve
@@ -260,23 +261,22 @@ The shell can append one prepared successor to mpv. Playback status includes a
 monotonic `transitions` count for the current playback generation; the UI uses
 it to advance its queue without issuing another play command. See decision 0007.
 
-For playlist manual skips the shell can resolve up to six neighbouring tracks in a
-cancellable background operation. Temporary links are held in a six-entry,
-short-lived memory cache and never exposed to or persisted by the UI. This is
-separate from mpv audio buffering; a cache miss falls back to fresh resolution.
+Lookahead resolves up to forty neighbouring links with eight workers and at most
+sixteen extractor launches per cycle. The three nearest requests also warm HLS
+startup audio. Manual Play can warm the selected track separately. Temporary
+links remain internal and are not persisted; misses use fresh resolution.
 
-Playlist lookahead now resolves up to three neighbours in each direction (six
-in total), nearest first. The bounded in-memory cache is trimmed to the current
-neighbourhood and keeps temporary links across manual selections until expiry.
+Supported HLS manifests are rewritten for a loopback HTTP server. Up to twelve
+segments and 3 MiB of segment payload are retained per track, with an initial
+manifest published after three segments. Unsupported forms fall back to the
+original stream. Both link and audio caches retain up to 41 tracks; old warm
+neighbourhoods are not yet trimmed to current-plus-three. Retained segment payload
+can therefore reach 123 MiB. Manifests, concurrent downloads, runtime allocations
+and mpv use additional memory; manual warm workers lack a global concurrency cap.
 
-
-The lookahead window now holds up to twenty neighbouring stream links. Audio
-bytes are not cached by this mechanism; HLS audio preloading remains pending.
-
-The shell additionally caches the first three HLS media segments for up to twenty neighbours and the current track in RAM, bounded to 2 MiB per segment. mpv reads a rewritten local manifest and cached segments via loopback; remaining media stays on the original HTTPS source. Unsupported HLS forms and unsuccessful prefetch use the original stream. Stop and close clear the cache. Readiness, signed URL expiry and network variability mean immediate switching is not guaranteed.
-
-Current lookahead is bounded at forty neighbours plus the current track. Up to twelve segments and 6 MiB of audio per track are retained; the first three are made available while remaining segments continue loading. Actual memory usage depends on source data and playback activity.
-
-Lookahead uses eight workers which draw requests in proximity order without waiting for a fixed batch. Retained audio is limited to 3 MiB per track, for at most 41 tracks; other allocations and mpv use additional memory.
-
-Manual selection within a playlist does not cancel its ongoing lookahead. Numeric stream and segment expiry is honoured with a two-minute safety margin and a maximum cache age of 30 minutes; entries with unknown expiry retain short fallback lifetimes. Stop still cancels work and clears cached audio.
+Manual selection preserves playlist lookahead. Numeric expiry uses a two-minute
+safety margin and a maximum age of 55 minutes; unknown expiry uses short
+fallback lifetimes. Stop clears entries and invalidates publication, but in-flight
+manual HTTP work is not synchronously cancelled or joined. These lifecycle and
+budget defects remain accepted follow-ups in `tasks/pr20-pr23-integration.md`.
+Immediate or gapless playback and bounded total process memory are not guaranteed.

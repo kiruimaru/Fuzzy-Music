@@ -1,0 +1,33 @@
+--- a/src/app.test.tsx
++++ b/src/app.test.tsx
+@@ -94,3 +94,15 @@
+   expect(safeMessage("token=SECRET")).not.toContain("SECRET");
+   expect(safeMessage({ code: "playback_failed", message: "SECRET" })).not.toContain("SECRET");
+ });
++
++test("review missing extractor shows the runtime repair command", async () => {
++  vi.mocked(api.search).mockRejectedValue({
++    code: "source_unavailable",
++    message: "yt-dlp is missing or cannot start. Run setup-windows-runtime.ps1 beside the app on Windows, or repair FUZZY_YTDLP. See README.md.",
++    retryable: false,
++  });
++  render(<App />);
++  search("music");
++  const error = await screen.findByText(/Source unavailable/);
++  expect(error.textContent).toContain("setup-windows-runtime.ps1");
++});
+--- a/review-release-discovery.rs
++++ b/review-release-discovery.rs
+@@ -0,0 +1,12 @@
++#[path = "src-tauri/src/dependencies.rs"]
++mod dependencies;
++
++fn main() {
++    let discovered = dependencies::executable("FUZZY_REVIEW_UNUSED_OVERRIDE", "mpv");
++    println!("release mpv discovery: {}", discovered.display());
++    println!("discovered executable exists: {}", discovered.is_file());
++    assert!(
++        discovered.is_file(),
++        "system mpv exists on PATH but release discovery selects a missing tools/mpv"
++    );
++}

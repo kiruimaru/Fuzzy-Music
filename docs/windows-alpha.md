@@ -8,15 +8,17 @@ RU: Распакуйте весь ZIP в доступный для записи 
 параметр Bypass действует только на этот процесс. Не переносите EXE отдельно
 от созданного tools. При сбое загрузки проверьте доступ к GitHub и повторите.
 Интернет необходим. Это ранняя alpha:
-очередь, избранное, пауза, перемотка и настройки ещё не реализованы.
+есть управление воспроизведением и очередь треков открытого плейлиста;
+избранное, сохранение настроек и отдельный редактор очереди ещё не реализованы.
 Используется системный ручной прокси Windows; после его изменения перезапустите
 приложение. PAC/WPAD не поддерживается.
 
 EN: Extract the entire ZIP to a writable directory, then double-click
 `Fuzzy Music.exe`. First run the PowerShell setup command above to download
 digest-verified tools directly from upstream. Keep the tools directory alongside it. Public SoundCloud
-search, Play and Stop require internet access. Queue, favourites, pause, seek
-and settings are not implemented. Windows manual system proxy is detected at
+search and streaming require internet access. Pause, seek, volume and playlist
+queue playback are implemented; favourites, persisted settings and independent
+queue editing remain unfinished. Windows manual system proxy is detected at
 startup; restart after changes. PAC/WPAD is unsupported.
 
 RU: Если SoundCloud недоступен напрямую, включите свой VPN/системный ручной

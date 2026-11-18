@@ -1,7 +1,7 @@
 # Fuzzy Music Project Context
 
-**Last reviewed:** 2026-11-17  
-**Status:** PRs #17/#18 merged; local Windows portable alpha candidate; Linux task #19
+**Last reviewed:** 2026-11-19
+**Status:** playback controls, playlist transitions and Windows alpha integrated; review follow-ups remain
 
 ## Product
 
@@ -20,7 +20,8 @@ The first release must support:
 - local favourites;
 - persisted settings.
 
-Playlists, history, and additional themes are post-MVP.
+Saved/custom playlists, history, and additional themes are post-MVP.
+Public source playlist discovery and playback are already implemented.
 
 ## Architecture
 
@@ -47,24 +48,32 @@ response formats inside the source adapter.
 
 ## Known state
 
-- Windows alpha packaging/discovery is in local `feat/windows-alpha`; see
-  `../tasks/windows-alpha.md`, decision 0005 and `windows-alpha.md`. Live portable
+- Windows alpha packaging/discovery from PR #20 is integrated; see
+  `../tasks/windows-alpha.md`, decision 0005-portable-alpha and `windows-alpha.md`. Live portable
   search/Playing/Stop passed with Windows-only PATH and different cwd. Public
   Portable ZIP supplies npm notices; a separate matching corresponding-source
   artifact supplies application/locked Rust sources with Git/executable provenance. External
   mpv/yt-dlp are acquired directly via digest-verified first-run bootstrap because
   exact transitive mpv source was not available as an upstream bundle. Clean
   Windows runtime verification remains external. Linux alpha is assigned in #19.
-- Local branch adds a dark Spotify-style shell and public SoundCloud playlist
-  search (tabs, playlist grid, playlist track view) on top of the playback
-  controls slice. See decision 0006 and `../tasks/playlist-search.md`. Saved
-  playlists, queue and issue closure remain out of scope. Not published.
-
-- Local branch `feat/playback-controls` adds a basic dark player panel and mpv
-  JSON IPC pause/resume, seek and volume; see `../tasks/playback-controls.md`
-  and decision 0005. Queue and persisted settings remain unimplemented. This
-  work is not published and does not close issue #22.
-
+- PR #23 adds public SoundCloud playlist discovery, a playlist playback queue,
+  previous/next, automatic transitions, link lookahead and HLS startup caching,
+  along with mpv JSON IPC pause/resume, seek and volume. Saved playlists,
+  independent queue editing, favourites and persisted settings remain unfinished.
+  Issue #22 is not closed by integration.
+- PRs #20 (Windows alpha) and #23 (playback controls, public playlists and
+  transitions) were reviewed at heads `82bafc8` and `cfa6c69`. Their normal
+  Rust/frontend checks pass, but additional reproductions expose cache limits,
+  worker ownership, HTTP cancellation/deadlines, Linux release tool discovery
+  and missing-runtime UI guidance defects. See
+  `../tasks/pr-review-2026-11-19.md` and its regression patches.
+  The owner authorized integration after manual testing, accepting the remaining
+  findings as follow-up work. See `../tasks/pr20-pr23-integration.md`.
+- Combined Linux verification: 44 Rust tests passed / 4 ignored, 15 frontend
+  tests, four browser fixture tests, strict Clippy and rustfmt passed.
+  The original PR #23 manual run had no observed crash/OOM or journal error;
+  total service memory started near 269 MiB, was about 537 MiB at 12.5 minutes,
+  and peaked at 677 MiB. This does not establish absence of a memory leak.
 - AI context assembly has offline regression coverage in
   `scripts/test-ai-context.sh`; see `tasks/ai-context-11.md` for scope and limits.
 - The repository and local Rust environment were prepared.
@@ -92,7 +101,7 @@ response formats inside the source adapter.
   not repeated on this build. See `../tasks/windows-network-integration.md` and
   decision 0004 for checks, startup restart requirements and PAC/bypass limitations.
 
-These are local checks, not CI. Linux native rendering needed
+The Linux evidence above consists of local checks. Native rendering needed
 `WEBKIT_DISABLE_DMABUF_RENDERER=1`; direct SoundCloud access timed out.
 See [`shell-development.md`](shell-development.md) and
 [`../tasks/tauri-shell-14.md`](../tasks/tauri-shell-14.md) for setup and limits.
@@ -119,9 +128,11 @@ PR #12 (source), PR #15 (application API, retargeted to main), and PR #13
 (context checks) are merged into main. The journal conflict in #13 was resolved
 by preserving both histories. Old source branches need no separate code merge:
 their implementation is already integrated, including the later guide edits.
-Issue #14 implementation is in `feat/issue-14-tauri-shell`, with task context
-`../tasks/tauri-shell-14.md`. Next acceptance work is contributor contract review,
-review of the Windows network follow-up and release/tool packaging decisions.
+Issue #14 shell PR #17 and Windows network PR #18 are merged into main at
+`faa334a`. Their task contexts retain platform/manual acceptance limitations.
+PRs #20/#23 are integrated with merge conflict resolutions preserving portable
+dependency errors and mpv IPC controls. Next work is resolving the accepted
+review findings, contributor contract review, and release/tool packaging decisions.
 
 1. Confirm source connectivity and keep the source adapter isolated.
 2. Create the minimal Tauri application and search states.
@@ -141,8 +152,9 @@ review of the Windows network follow-up and release/tool packaging decisions.
 
 ## Open decisions
 
-- Full playback API beyond the implemented Play/Stop slice (decision 0003).
-- How yt-dlp and mpv are distributed; discovery currently uses PATH/env overrides.
+- Independent queue editing and remaining full playback API work (issue #22).
+- Linux release dependency discovery/setup; #20 currently requires beside-app
+  tools for release builds on Linux too, with explicit FUZZY overrides as a workaround.
 - SQLite schema and migration strategy.
 - Minimum supported Windows and Linux versions.
 - CI matrix and release artifact format.

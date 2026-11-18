@@ -5,20 +5,21 @@ The first release is intended to search public SoundCloud tracks and stream
 available audio without requiring users to obtain API keys manually.
 
 The repository includes a Rust SoundCloud adapter, a typed application API,
-and a minimal Tauri 2 + React/TypeScript shell for search, Play and Stop through
-mpv. See [desktop setup and verification](docs/shell-development.md).
+and a Tauri 2 + React/TypeScript shell for search and mpv playback.
+See [desktop setup and verification](docs/shell-development.md).
 
-The local playback-controls branch extends the panel with pause/resume,
-position/seek and volume through mpv JSON IPC. See
+The player supports pause/resume, position/seek and volume through mpv JSON IPC. See
 [`tasks/playback-controls.md`](tasks/playback-controls.md) for verification and
-remaining limitations. Queue and persistence are not implemented in this slice.
+remaining limitations. Playlist playback supports previous/next and automatic
+transitions; independent queue editing and persistence remain unfinished.
 
 A dark Spotify-style shell also adds public SoundCloud **playlist search**:
 search playlists, open one and play its tracks through the same player. It uses
 the SoundCloud web API with an auto-discovered `client_id`, because `yt-dlp`
 cannot search playlists. See decision 0006 and
-[`tasks/playlist-search.md`](tasks/playlist-search.md). Saved playlists and a
-queue are not implemented.
+[`tasks/playlist-search.md`](tasks/playlist-search.md). Saved playlists are not
+implemented. Integration checks and accepted review follow-ups are recorded in
+[`tasks/pr20-pr23-integration.md`](tasks/pr20-pr23-integration.md).
 
 ## Project goals
 
@@ -28,7 +29,7 @@ queue are not implemented.
 - Manage a playback queue and switch tracks.
 - Store local favourites and application settings.
 
-Custom playlists, history, and additional themes are post-MVP work.
+Saved/custom playlists, history, and additional themes are post-MVP work.
 
 ## Architecture and stack
 
@@ -41,9 +42,9 @@ first release:
 | yt-dlp | SoundCloud search, metadata, and stream discovery | Used by prototype |
 | Cargo, rustfmt, Clippy | Build, tests, formatting, and linting | Available |
 | Git and GitHub | Version control and Pull Request review | In use |
-| Tauri 2 | Typed commands between interface and Rust | Search/Play/Stop implemented |
+| Tauri 2 | Typed commands between interface and Rust | Search, playlists and playback controls implemented |
 | React, TypeScript, CSS | Search and minimal playback interface | Implemented |
-| mpv | Audio playback | Play/Stop implemented; other controls planned |
+| mpv | Audio playback | Play/Stop, pause, seek, volume and playlist transitions implemented |
 | SQLite | Local favourites and settings | Planned |
 
 SoundCloud-specific code is isolated in `crates/soundcloud`. The planned
@@ -76,8 +77,8 @@ the documented DTOs. Persistence and the full playback API remain planned.
 ## Quick start on Windows x64
 
 For the portable alpha artifact and first-run runtime setup, see
-[Windows alpha](docs/windows-alpha.md). This is the search/Play/Stop slice,
-not the full MVP. Clean-machine verification remains external.
+[Windows alpha](docs/windows-alpha.md). The player includes playlist playback
+and controls; the full MVP and clean-machine verification remain unfinished.
 Choose the **portable** artifact for the small user download; matching GPL
 application and vendored dependency sources are a separate **corresponding-source**
 artifact on the same build, with checksums and Git/executable provenance.

@@ -43,12 +43,19 @@ PRs #20/#23. Preserve source playlist playback and request generations.
 
 ## Remaining Acceptance
 
+- Implementation `8d91e75` is published in draft PR #24:
+  https://github.com/kiruimaru/Fuzzy-Music/pull/24
+  Windows alpha CI started; no Windows result is claimed for this change.
+- The native debug application was launched as transient user service
+  `fuzzy-music-issue22.service`; its Fuzzy Music window is mapped and visible.
+  Process-local proxy/rendering overrides match the preceding Linux manual run.
+  No human listening result has been recorded.
 - Replace memory settings port when #21 provides persistence. Proposed commands
   and ownership are in the contracts; contributor agreement is not claimed.
 - Human audio scenario: search, add three, select, pause/resume, seek, volume,
   Next/Previous, EOF and Stop; confirm no mpv remains after Stop/window close.
 - Windows verification of this change remains separate from Linux evidence.
-- Publish focused PR and obtain Maroi9p review. Keep #22 open until outstanding
+- Obtain Maroi9p review. Keep #22 open until outstanding
   acceptance is recorded; avoid an automatic closing keyword in the PR.
 - Earlier cache/worker/HTTP and Linux packaging findings remain tracked in
   `pr20-pr23-integration.md`; this task does not represent them as fixed.

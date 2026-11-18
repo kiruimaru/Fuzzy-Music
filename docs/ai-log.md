@@ -18,6 +18,9 @@ Implement issue #22 on top of the reviewed playback/playlist integration.
   Preferred volume is passed at player startup, retained on Stop and saved
   through serialized port writes. No second persistence store was introduced.
 - Updated contracts/context and decision 0009; task: `playback-queue-22.md`.
+- Published implementation `8d91e75` in draft PR #24; Windows alpha CI started.
+  Issue #22 remains open. Launched the new native window for user acceptance
+  under transient service `fuzzy-music-issue22.service`; window is visible.
 
 ### Checks
 
@@ -43,8 +46,8 @@ Implement issue #22 on top of the reviewed playback/playlist integration.
 
 ### Next action
 
-Publish a focused PR referencing #22, perform human native queue acceptance, and
-connect #21's storage API when available. Keep #22 open pending acceptance.
+Check PR #24 Windows CI, perform human native queue acceptance, obtain contributor
+review, and connect #21's storage API when available. Keep #22 open pending acceptance.
 
 ## 2026-11-19 | Agent: Codex | Task: pr20-pr23-integration
 

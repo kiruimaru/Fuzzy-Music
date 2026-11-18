@@ -20,6 +20,7 @@ export type PlaybackStatus = {
   volume: number;
   seekable: boolean;
   error: string | null;
+  transitions?: number;
 };
 
 export type Playlist = {
@@ -50,6 +51,13 @@ export const api = {
       generation, request: { source: track.source, trackUrl: track.sourceUrl },
     }),
   stop: (generation: number) => invoke<void>("stop_playback", { generation }),
+  prepare: (generation: number, track: Track, playbackGeneration: number) => invoke<void>("prepare_track", {
+    generation, playbackGeneration, request: { source: track.source, trackUrl: track.sourceUrl },
+  }),
+  prefetch: (generation: number, tracks: Track[], playbackGeneration: number) => invoke<void>("prefetch_tracks", {
+    generation, playbackGeneration, requests: tracks.map(track => ({ source: track.source, trackUrl: track.sourceUrl })),
+  }),
+  cancelPreparation: (generation: number) => invoke<void>("cancel_preparation", { generation }),
   status: () => invoke<PlaybackStatus>("playback_status"),
   searchPlaylists: (generation: number, query: string) =>
     invoke<{ playlists: Playlist[]; nextPageToken: string | null }>("search_playlists", {

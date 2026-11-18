@@ -83,6 +83,34 @@ impl NetworkPolicy {
             command.env(key, value).env(key.to_ascii_uppercase(), value);
         }
     }
+
+    pub fn apply_with_loopback_bypass(&self, command: &mut Command) {
+        self.apply(command);
+        let bypass = self
+            .values
+            .iter()
+            .find(|(key, _)| key == "no_proxy")
+            .map(|(_, value)| value.as_str())
+            .unwrap_or("");
+        let value = format!("{bypass},localhost,127.0.0.1,::1");
+        command.env("no_proxy", &value).env("NO_PROXY", value);
+    }
+
+    pub fn https_proxy(&self) -> Result<Option<ureq::Proxy>, super::SoundCloudError> {
+        let value = self
+            .values
+            .iter()
+            .find(|(key, _)| key == "https_proxy")
+            .or_else(|| self.values.iter().find(|(key, _)| key == "all_proxy"));
+        value
+            .filter(|(_, value)| !value.is_empty())
+            .map(|(_, value)| {
+                ureq::Proxy::new(value).map_err(|_| {
+                    super::SoundCloudError::Network("Unsupported proxy configuration".into())
+                })
+            })
+            .transpose()
+    }
 }
 
 #[derive(Default)]

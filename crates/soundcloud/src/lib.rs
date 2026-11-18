@@ -151,7 +151,7 @@ impl SoundCloudClient {
         }
         Ok(PlaylistSearchResults {
             query: query.into(),
-            playlists: web::search(options, query, limit)?,
+            playlists: web::search(options, query, limit, self.network.as_ref())?,
         })
     }
 
@@ -169,7 +169,7 @@ impl SoundCloudClient {
                 "Expected an HTTPS SoundCloud playlist URL".into(),
             ));
         }
-        let (playlist, tracks) = web::playlist(options, playlist_url)?;
+        let (playlist, tracks) = web::playlist(options, playlist_url, self.network.as_ref())?;
         Ok(PlaylistTracks { playlist, tracks })
     }
 
@@ -243,6 +243,26 @@ impl SoundCloudClient {
         }
         serde_json::from_slice(&output.stdout).map_err(|e| {
             SoundCloudError::InvalidResponse(format!("Extractor returned invalid JSON: {e}"))
+        })
+    }
+
+    /// Fast metadata-only search using the same web transport as playlists.
+    /// The extractor remains available for probes and audio resolution.
+    pub fn search_web_with_options(
+        &self,
+        query: &str,
+        limit: usize,
+        options: &RequestOptions,
+    ) -> Result<SearchResults, SoundCloudError> {
+        let query = query.trim();
+        if query.is_empty() || !(1..=100).contains(&limit) {
+            return Err(SoundCloudError::InvalidInput(
+                "Expected a query and limit 1..100".into(),
+            ));
+        }
+        Ok(SearchResults {
+            query: query.into(),
+            tracks: web::search_tracks(options, query, limit, self.network.as_ref())?,
         })
     }
 }

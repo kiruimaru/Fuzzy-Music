@@ -53,6 +53,19 @@ export function App() {
   const [volumeDraft, setVolumeDraft] = useState<number | null>(null);
   const [controlling, setControlling] = useState(false);
   const active = playback === "playing" || playback === "paused";
+  const [queue, setQueue] = useState<Track[]>([]);
+  const [queueIndex, setQueueIndex] = useState(-1);
+  const queueRef = useRef<Track[]>([]);
+  const indexRef = useRef(-1);
+  const autoAdvance = useRef(false);
+  const prepareGeneration = useRef(generationBase);
+  const preparedKey = useRef("");
+  const retryPreparationAfter = useRef(0);
+  const observedTransitions = useRef(0);
+  const lookaheadGeneration = useRef(generationBase);
+  const lookaheadKey = useRef("");
+  const lookaheadTime = useRef(0);
+  const lookaheadPending = useRef(false);
 
   useEffect(() => {
     let disposed = false;
@@ -65,12 +78,67 @@ export function App() {
         const status = await api.status();
         if (!disposed && generation === playbackGeneration.current &&
             status.generation === generation && !resolving.current) {
+          if ((status.transitions ?? 0) > observedTransitions.current) {
+            observedTransitions.current = status.transitions ?? 0;
+            const nextIndex = indexRef.current + 1;
+            const next = queueRef.current[nextIndex];
+            if (autoAdvance.current && next) {
+              indexRef.current = nextIndex;
+              setQueueIndex(nextIndex);
+              setSelected(next);
+              preparedKey.current = "";
+              retryPreparationAfter.current = 0;
+            }
+          }
           setPlayback(status.state === "loading" ? "starting" : status.state);
           setPosition(status.positionMs ?? 0);
           setDuration(status.durationMs ?? null);
           setVolume(status.volume ?? 100);
           setSeekable(status.seekable ?? false);
           setPlayError(status.state === "error" ? status.error ?? "Playback failed. Please retry." : "");
+          if (status.state === "playing" || status.state === "paused") {
+            const next = queueRef.current[indexRef.current + 1];
+            const neighbours: Track[] = [];
+            for (let distance = 1; distance <= 40 && neighbours.length < 40; distance++) {
+              const nextTrack = queueRef.current[indexRef.current + distance];
+              const previousTrack = queueRef.current[indexRef.current - distance];
+              if (nextTrack) neighbours.push(nextTrack);
+              if (previousTrack && neighbours.length < 40) neighbours.push(previousTrack);
+            }
+            const key = JSON.stringify(neighbours.map(track => track.sourceUrl));
+            if (status.state === "playing" && autoAdvance.current && neighbours.length && !lookaheadPending.current &&
+                (key !== lookaheadKey.current || Date.now() - lookaheadTime.current >= 45000)) {
+              lookaheadKey.current = key;
+              lookaheadTime.current = Date.now();
+              lookaheadPending.current = true;
+              const current = ++lookaheadGeneration.current;
+              void api.prefetch(current, neighbours, generation).catch(() => {}).finally(() => {
+                if (current === lookaheadGeneration.current) lookaheadPending.current = false;
+              });
+            }
+            const remaining = status.durationMs === null ? Infinity : status.durationMs - status.positionMs;
+            // Resolve close to the transition so signed URLs do not sit unused
+            // for an entire long track. Pause suspends speculative work.
+            if (status.state === "playing" && next && remaining <= 30000 && preparedKey.current !== next.sourceUrl && Date.now() >= retryPreparationAfter.current) {
+              preparedKey.current = next.sourceUrl;
+              const preparation = ++prepareGeneration.current;
+              void api.prepare(preparation, next, generation).catch(() => {
+                if (preparation === prepareGeneration.current && generation === playbackGeneration.current) {
+                  preparedKey.current = "";
+                  retryPreparationAfter.current = Date.now() + 2000;
+                }
+              });
+            }
+          }
+          if (status.state === "stopped" && autoAdvance.current) {
+            const nextIndex = indexRef.current + 1;
+            const next = queueRef.current[nextIndex];
+            if (next) {
+              indexRef.current = nextIndex;
+              setQueueIndex(nextIndex);
+              void play(next, true);
+            } else { autoAdvance.current = false; }
+          }
         }
       } catch {
         if (!disposed && generation === playbackGeneration.current && generation > generationBase) {
@@ -87,6 +155,7 @@ export function App() {
       void api.cancelSearch(++searchGeneration.current).catch(() => {});
       void api.cancelPlaylists(++playlistGeneration.current).catch(() => {});
       void api.stop(++playbackGeneration.current).catch(() => {});
+      void api.cancelPreparation(++prepareGeneration.current).catch(() => {});
     };
   }, []);
 
@@ -176,7 +245,22 @@ export function App() {
     }
   }
 
-  async function play(track: Track) {
+  async function play(track: Track, fromQueue = false) {
+    if (!fromQueue) {
+      autoAdvance.current = false;
+      queueRef.current = [];
+      indexRef.current = -1;
+      setQueue([]);
+      setQueueIndex(-1);
+    }
+    preparedKey.current = "";
+    if (!fromQueue) {
+      ++lookaheadGeneration.current;
+      lookaheadPending.current = false;
+      lookaheadKey.current = "";
+    }
+    retryPreparationAfter.current = 0;
+    observedTransitions.current = 0;
     const generation = ++playbackGeneration.current;
     resolving.current = true;
     setSelected(track);
@@ -199,6 +283,9 @@ export function App() {
   }
 
   async function stop() {
+    autoAdvance.current = false;
+    preparedKey.current = "";
+    void api.cancelPreparation(++prepareGeneration.current).catch(() => {});
     const generation = ++playbackGeneration.current;
     resolving.current = false;
     setPlayback("stopping");
@@ -213,6 +300,26 @@ export function App() {
       setPlayback("error");
       setPlayError(safeMessage(error));
     }
+  }
+
+  function playPlaylist(startIndex = 0) {
+    if (!tracks.length) return;
+    queueRef.current = [...tracks];
+    indexRef.current = startIndex;
+    setQueue([...tracks]);
+    setQueueIndex(startIndex);
+    autoAdvance.current = true;
+    void play(tracks[startIndex], true);
+  }
+
+  function skipQueue(direction: number) {
+    const index = indexRef.current + direction;
+    const track = queueRef.current[index];
+    if (!track) return;
+    indexRef.current = index;
+    setQueueIndex(index);
+    autoAdvance.current = true;
+    void play(track, true);
   }
 
   async function control(operation: (generation: number) => Promise<void>) {
@@ -323,6 +430,7 @@ export function App() {
                 </p>}
             </div>
           </div>
+          <button className="primary" onClick={() => playPlaylist() } disabled={!tracks.length}>Play playlist</button>
         </section>}
 
       {tracks.length > 0 &&
@@ -339,7 +447,7 @@ export function App() {
                   <span>{track.author}</span>
                 </div>
                 <span className="row-duration">{track.durationMs === null ? "--:--" : time(track.durationMs)}</span>
-                <button className="row-play" onClick={() => void play(track)} aria-label={`Play ${track.title}`}>
+                <button className="row-play" onClick={() => openPlaylist ? playPlaylist(index) : void play(track)} aria-label={`Play ${track.title}`}>
                   <PlayIcon />
                 </button>
               </li>;
@@ -368,6 +476,7 @@ export function App() {
       <div className="transport">
         <p className="transport-status" role="status" aria-live="polite">{statusText}</p>
         <div className="transport-buttons">
+          <button className="ghost small" disabled={queueIndex <= 0} onClick={() => skipQueue(-1)} aria-label="Previous track">‹</button>
           <button className="icon-btn" disabled={!active || controlling}
             aria-label={playback === "paused" ? "Resume" : "Pause"}
             onClick={() => void control(generation => api.pause(generation, playback !== "paused"))}>
@@ -377,7 +486,9 @@ export function App() {
             <StopIcon />
           </button>
           {selected && <button className="ghost small" onClick={() => void play(selected)}>Play again</button>}
+          <button className="ghost small" disabled={queueIndex < 0 || queueIndex + 1 >= queue.length} onClick={() => skipQueue(1)} aria-label="Next track">›</button>
         </div>
+        {queueIndex >= 0 && <span className="results-status">{queueIndex + 1} / {queue.length}</span>}
       </div>
 
       <div className="levels">

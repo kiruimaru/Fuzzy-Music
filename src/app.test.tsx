@@ -11,6 +11,9 @@ vi.mock("./api", async (original) => ({
     play: vi.fn(), stop: vi.fn().mockResolvedValue(undefined),
     status: vi.fn().mockResolvedValue({ generation: 0, state: "idle" }),
     searchPlaylists: vi.fn(),
+    prepare: vi.fn().mockResolvedValue(undefined),
+    prefetch: vi.fn().mockResolvedValue(undefined),
+    cancelPreparation: vi.fn().mockResolvedValue(undefined),
     playlistTracks: vi.fn(),
     cancelPlaylists: vi.fn().mockResolvedValue(undefined),
     pause: vi.fn().mockResolvedValue(undefined), seek: vi.fn().mockResolvedValue(undefined),
@@ -134,6 +137,169 @@ test("playlist errors stay safe and do not show diagnostics", async () => {
   fireEvent.click(screen.getByRole("button", { name: "Search" }));
   await screen.findByText("Source unavailable. Check yt-dlp or try another track.");
   expect(screen.queryByText("SECRET")).toBeNull();
+});
+
+test("playlist prefetches its successor, advances on EOF and Stop prevents another advance", async () => {
+  const second = { ...track, id: "2", title: "Second", sourceUrl: "https://soundcloud.com/a/second" };
+  vi.mocked(api.searchPlaylists).mockResolvedValue({ playlists: [playlist], nextPageToken: null });
+  vi.mocked(api.playlistTracks).mockResolvedValue({ playlist, tracks: [track, second], skippedTrackCount: 0 });
+  vi.mocked(api.play).mockResolvedValue(undefined);
+  let state: "playing" | "stopped" = "playing";
+  vi.mocked(api.status).mockImplementation(async () => ({
+    generation: vi.mocked(api.play).mock.calls.at(-1)?.[0] ?? 0,
+    state, trackId: "1", error: null, positionMs: 170000, durationMs: 180000, volume: 50, seekable: true,
+  }));
+  render(<App />);
+  fireEvent.click(screen.getByRole("tab", { name: "Playlists" }));
+  fireEvent.change(screen.getByLabelText("Playlist name"), { target: { value: "chill" } });
+  fireEvent.click(screen.getByRole("button", { name: "Search" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Open playlist Chill mix" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Play playlist" }));
+  await waitFor(() => expect(api.prepare).toHaveBeenCalledWith(expect.any(Number), second, expect.any(Number)));
+  expect(api.play).toHaveBeenCalledTimes(1);
+  state = "stopped";
+  await waitFor(() => expect(api.play).toHaveBeenCalledTimes(2));
+  expect(vi.mocked(api.play).mock.calls[1][1]).toEqual(second);
+  expect(screen.getByText("2 / 2")).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "Stop" }));
+  await screen.findByText("Stopped");
+  await act(async () => { await new Promise(resolve => setTimeout(resolve, 350)); });
+  expect(api.play).toHaveBeenCalledTimes(2);
+  expect(api.cancelPreparation).toHaveBeenCalled();
+});
+
+test("failed preparation is retried while the same track is playing", async () => {
+  const second = { ...track, id: "2", sourceUrl: "https://soundcloud.com/a/second" };
+  vi.mocked(api.searchPlaylists).mockResolvedValue({ playlists: [playlist], nextPageToken: null });
+  vi.mocked(api.playlistTracks).mockResolvedValue({ playlist, tracks: [track, second], skippedTrackCount: 0 });
+  vi.mocked(api.play).mockResolvedValue(undefined);
+  vi.mocked(api.prepare).mockRejectedValueOnce(new Error("temporary failure")).mockResolvedValue(undefined);
+  vi.mocked(api.status).mockImplementation(async () => ({
+    generation: vi.mocked(api.play).mock.calls.at(-1)?.[0] ?? 0,
+    state: "playing", trackId: "1", error: null, positionMs: 170000,
+    durationMs: 180000, volume: 50, seekable: true,
+  }));
+  render(<App />);
+  fireEvent.click(screen.getByRole("tab", { name: "Playlists" }));
+  fireEvent.change(screen.getByLabelText("Playlist name"), { target: { value: "chill" } });
+  fireEvent.click(screen.getByRole("button", { name: "Search" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Open playlist Chill mix" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Play playlist" }));
+  await waitFor(() => expect(api.prepare).toHaveBeenCalledTimes(2), { timeout: 4000 });
+  expect(vi.mocked(api.prepare).mock.calls[1][1]).toEqual(second);
+});
+
+test("lookahead starts early and includes the next two playlist tracks", async () => {
+  const second = { ...track, id: "2", sourceUrl: "https://soundcloud.com/a/second" };
+  const third = { ...track, id: "3", sourceUrl: "https://soundcloud.com/a/third" };
+  vi.mocked(api.searchPlaylists).mockResolvedValue({ playlists: [playlist], nextPageToken: null });
+  vi.mocked(api.playlistTracks).mockResolvedValue({ playlist, tracks: [track, second, third], skippedTrackCount: 0 });
+  vi.mocked(api.play).mockResolvedValue(undefined);
+  vi.mocked(api.status).mockImplementation(async () => ({
+    generation: vi.mocked(api.play).mock.calls.at(-1)?.[0] ?? 0,
+    state: "playing", trackId: "1", error: null, positionMs: 1000,
+    durationMs: 180000, volume: 50, seekable: true,
+  }));
+  render(<App />);
+  fireEvent.click(screen.getByRole("tab", { name: "Playlists" }));
+  fireEvent.change(screen.getByLabelText("Playlist name"), { target: { value: "chill" } });
+  fireEvent.click(screen.getByRole("button", { name: "Search" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Open playlist Chill mix" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Play playlist" }));
+  await waitFor(() => expect(api.prefetch).toHaveBeenCalledWith(expect.any(Number), [second, third], expect.any(Number)));
+  expect(api.prepare).not.toHaveBeenCalled();
+});
+
+test("manual skips keep the existing playlist prefetch running", async () => {
+  const pending = deferred<void>();
+  const second = { ...track, id: "2", title: "Second", sourceUrl: "https://soundcloud.com/a/second" };
+  vi.mocked(api.searchPlaylists).mockResolvedValue({ playlists: [playlist], nextPageToken: null });
+  vi.mocked(api.playlistTracks).mockResolvedValue({ playlist, tracks: [track, second], skippedTrackCount: 0 });
+  vi.mocked(api.play).mockResolvedValue(undefined);
+  vi.mocked(api.prefetch).mockReturnValueOnce(pending.promise);
+  vi.mocked(api.status).mockImplementation(async () => ({
+    generation: vi.mocked(api.play).mock.calls.at(-1)?.[0] ?? 0,
+    state: "playing", trackId: "1", error: null, positionMs: 1000,
+    durationMs: 180000, volume: 50, seekable: true,
+  }));
+  render(<App />);
+  fireEvent.click(screen.getByRole("tab", { name: "Playlists" }));
+  fireEvent.change(screen.getByLabelText("Playlist name"), { target: { value: "chill" } });
+  fireEvent.click(screen.getByRole("button", { name: "Search" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Open playlist Chill mix" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Play playlist" }));
+  await waitFor(() => expect(api.prefetch).toHaveBeenCalledTimes(1));
+  fireEvent.click(screen.getByRole("button", { name: "Next track" }));
+  await waitFor(() => expect(api.play).toHaveBeenCalledTimes(2));
+  await act(async () => { await new Promise(resolve => setTimeout(resolve, 350)); });
+  expect(api.prefetch).toHaveBeenCalledTimes(1);
+  await act(async () => pending.resolve());
+});
+
+test("lookahead prioritizes neighbouring tracks in both directions", async () => {
+  const items = Array.from({ length: 7 }, (_, index) => ({
+    ...track, id: String(index), title: `Track ${index}`, sourceUrl: `https://soundcloud.com/a/track${index}`,
+  }));
+  vi.mocked(api.searchPlaylists).mockResolvedValue({ playlists: [playlist], nextPageToken: null });
+  vi.mocked(api.playlistTracks).mockResolvedValue({ playlist, tracks: items, skippedTrackCount: 0 });
+  vi.mocked(api.play).mockResolvedValue(undefined);
+  vi.mocked(api.status).mockImplementation(async () => ({
+    generation: vi.mocked(api.play).mock.calls.at(-1)?.[0] ?? 0,
+    state: "playing", trackId: "3", error: null, positionMs: 1000,
+    durationMs: 180000, volume: 50, seekable: true,
+  }));
+  render(<App />);
+  fireEvent.click(screen.getByRole("tab", { name: "Playlists" }));
+  fireEvent.change(screen.getByLabelText("Playlist name"), { target: { value: "chill" } });
+  fireEvent.click(screen.getByRole("button", { name: "Search" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Open playlist Chill mix" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Play Track 3" }));
+  await waitFor(() => expect(api.prefetch).toHaveBeenCalledWith(expect.any(Number),
+    [items[4], items[2], items[5], items[1], items[6], items[0]], expect.any(Number)));
+});
+
+test("lookahead includes forty tracks at the start of a large playlist", async () => {
+  const items = Array.from({ length: 45 }, (_, index) => ({
+    ...track, id: String(index), title: `Track ${index}`, sourceUrl: `https://soundcloud.com/a/track${index}`,
+  }));
+  vi.mocked(api.searchPlaylists).mockResolvedValue({ playlists: [playlist], nextPageToken: null });
+  vi.mocked(api.playlistTracks).mockResolvedValue({ playlist, tracks: items, skippedTrackCount: 0 });
+  vi.mocked(api.play).mockResolvedValue(undefined);
+  vi.mocked(api.status).mockImplementation(async () => ({
+    generation: vi.mocked(api.play).mock.calls.at(-1)?.[0] ?? 0,
+    state: "playing", trackId: "0", error: null, positionMs: 1000,
+    durationMs: 180000, volume: 50, seekable: true,
+  }));
+  render(<App />);
+  fireEvent.click(screen.getByRole("tab", { name: "Playlists" }));
+  fireEvent.change(screen.getByLabelText("Playlist name"), { target: { value: "chill" } });
+  fireEvent.click(screen.getByRole("button", { name: "Search" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Open playlist Chill mix" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Play playlist" }));
+  await waitFor(() => expect(api.prefetch).toHaveBeenCalledWith(expect.any(Number), items.slice(1, 41), expect.any(Number)));
+});
+
+test("player transition updates the queue without starting the next track again", async () => {
+  const second = { ...track, id: "2", title: "Second", sourceUrl: "https://soundcloud.com/a/second" };
+  vi.mocked(api.searchPlaylists).mockResolvedValue({ playlists: [playlist], nextPageToken: null });
+  vi.mocked(api.playlistTracks).mockResolvedValue({ playlist, tracks: [track, second], skippedTrackCount: 0 });
+  vi.mocked(api.play).mockResolvedValue(undefined);
+  let transitions = 0;
+  vi.mocked(api.status).mockImplementation(async () => ({
+    generation: vi.mocked(api.play).mock.calls.at(-1)?.[0] ?? 0,
+    state: "playing", trackId: transitions ? "2" : "1", transitions, error: null,
+    positionMs: 170000, durationMs: 180000, volume: 50, seekable: true,
+  }));
+  render(<App />);
+  fireEvent.click(screen.getByRole("tab", { name: "Playlists" }));
+  fireEvent.change(screen.getByLabelText("Playlist name"), { target: { value: "chill" } });
+  fireEvent.click(screen.getByRole("button", { name: "Search" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Open playlist Chill mix" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Play playlist" }));
+  await waitFor(() => expect(api.prepare).toHaveBeenCalled());
+  transitions = 1;
+  await screen.findByText("2 / 2");
+  expect(api.play).toHaveBeenCalledTimes(1);
 });
 
 test("controls use the active playback generation without replaying the track", async () => {

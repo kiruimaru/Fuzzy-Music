@@ -4,7 +4,7 @@ pub use fuzzy_soundcloud::{CancellationToken, RequestOptions};
 use fuzzy_soundcloud::{SoundCloudClient, SoundCloudError};
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct Track {
     pub id: String,
@@ -17,7 +17,7 @@ pub struct Track {
     pub source_url: String,
 }
 
-#[derive(Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "lowercase")]
 pub enum Source {
     Soundcloud,
@@ -86,7 +86,7 @@ pub struct ResolveTrackRequest {
     pub track_url: String,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ResolveTrackResponse {
     pub track: Track,
@@ -204,6 +204,21 @@ pub struct Application {
 }
 
 impl Application {
+    pub fn search_tracks_fast(
+        &self,
+        request: SearchTracksRequest,
+        options: &RequestOptions,
+    ) -> Result<SearchTracksResponse, AppError> {
+        let results = self.soundcloud.search_web_with_options(
+            &request.query,
+            request.limit.unwrap_or(30),
+            options,
+        )?;
+        Ok(SearchTracksResponse {
+            tracks: results.tracks.into_iter().map(Track::from).collect(),
+            next_page_token: None,
+        })
+    }
     pub fn new(soundcloud: SoundCloudClient) -> Self {
         Self { soundcloud }
     }

@@ -67,6 +67,11 @@ fn run() -> Result<(), String> {
                 .resolve_with_options(&input, &options)
                 .map_err(|e| e.to_string())?,
         ),
+        "search-web" => serde_json::to_value(
+            client
+                .search_web_with_options(&input, limit, &options)
+                .map_err(|e| e.to_string())?,
+        ),
         "playlists" => serde_json::to_value(
             client
                 .search_playlists_with_options(&input, limit, &options)

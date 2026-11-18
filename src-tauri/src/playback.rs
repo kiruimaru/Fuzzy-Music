@@ -22,6 +22,7 @@ pub struct Snapshot {
     pub duration_ms: Option<u64>,
     pub volume: f64,
     pub seekable: bool,
+    pub advanced: bool,
 }
 
 /// One owned mpv process driven through `--input-ipc-server`.
@@ -49,6 +50,9 @@ pub struct Player {
     volume: f64,
     seekable: bool,
     failed: bool,
+    ended: bool,
+    queued: bool,
+    advanced: bool,
 }
 
 fn milliseconds(value: &Value) -> Option<u64> {
@@ -78,7 +82,7 @@ impl Player {
 
         let mut command = Command::new(executable);
         if let Some(network) = network {
-            network.apply(&mut command);
+            network.apply_with_loopback_bypass(&mut command);
         }
         command.arg(format!("--input-ipc-server={}", endpoint.display()));
         command.args([
@@ -92,6 +96,9 @@ impl Player {
             "--ytdl=no",
             "--network-timeout=15",
             "--volume=100",
+            "--idle=yes",
+            "--gapless-audio=yes",
+            "--prefetch-playlist=yes",
             "--",
             url,
         ]);
@@ -121,7 +128,8 @@ impl Player {
                 Err(_) if Instant::now() < deadline => {
                     std::thread::sleep(Duration::from_millis(20));
                 }
-                Err(_) => {
+                Err(error) => {
+                    eprintln!("mpv: IPC connection failed ({:?})", error.kind());
                     let _ = child.kill();
                     let _ = child.wait();
                     #[cfg(not(windows))]
@@ -151,6 +159,9 @@ impl Player {
             volume: 100.0,
             seekable: false,
             failed: false,
+            ended: false,
+            queued: false,
+            advanced: false,
         };
         player.observe()?;
         Ok(player)
@@ -189,6 +200,9 @@ impl Player {
             volume: 100.0,
             seekable: false,
             failed: false,
+            ended: false,
+            queued: false,
+            advanced: false,
         };
         player.observe()?;
         Ok(player)
@@ -234,15 +248,62 @@ impl Player {
         self.command(json!(["set_property", "volume", volume]))
     }
 
+    pub fn load(&mut self, url: &str) -> Result<(), AppError> {
+        // Consume events from the old file before resetting readiness.
+        self.drain();
+        self.command(json!(["loadfile", url, "replace"]))?;
+        self.command(json!(["set_property", "pause", false]))?;
+        self.playing = false;
+        self.paused = false;
+        self.ended = false;
+        self.queued = false;
+        self.advanced = false;
+        self.failed = false;
+        self.position_ms = 0;
+        self.duration_ms = None;
+        self.seekable = false;
+        self.started = Instant::now();
+        Ok(())
+    }
+
+    /// Queue only while the current file is still playing. Otherwise the caller
+    /// can fall back to the ordinary explicit play path.
+    pub fn append(&mut self, url: &str) -> Result<bool, AppError> {
+        self.drain();
+        if self.ended || !self.playing || self.failed || self.queued {
+            return Ok(false);
+        }
+        self.command(json!(["loadfile", url, "append"]))?;
+        self.queued = true;
+        Ok(true)
+    }
+
     fn accept(&mut self, message: &Value) {
         if message["error"]
             .as_str()
             .is_some_and(|error| error != "success")
         {
+            eprintln!("mpv: IPC command returned an error");
             self.failed = true;
         }
         match message["event"].as_str() {
-            Some("end-file") if message["reason"] == "error" => self.failed = true,
+            Some("start-file") => {
+                if self.ended && self.queued {
+                    self.queued = false;
+                    self.advanced = true;
+                }
+                self.started = Instant::now();
+                self.ended = false;
+                self.playing = false;
+                self.position_ms = 0;
+                self.duration_ms = None;
+                self.seekable = false;
+            }
+            Some("end-file") if message["reason"] == "error" => {
+                eprintln!("mpv: media playback ended with an error");
+                self.failed = true;
+            }
+            Some("end-file") if message["reason"] == "eof" => self.ended = true,
             Some("file-loaded") => self.playing = true,
             Some("property-change") => match message["name"].as_str() {
                 Some("time-pos") => {
@@ -299,6 +360,7 @@ impl Player {
                 Ok(0) => return,
                 Ok(read) => read,
                 Err(_) => {
+                    eprintln!("mpv: IPC pipe read failed");
                     self.failed = true;
                     return;
                 }
@@ -331,7 +393,12 @@ impl Player {
             } else {
                 return Err(failure());
             }
+        } else if self.ended && self.queued {
+            "loading"
+        } else if self.ended {
+            "stopped"
         } else if !self.playing && self.started.elapsed() > Duration::from_secs(30) {
+            eprintln!("mpv: timed out waiting for playback");
             return Err(failure());
         } else if !self.playing {
             "loading"
@@ -346,6 +413,7 @@ impl Player {
             duration_ms: self.duration_ms,
             volume: self.volume,
             seekable: self.seekable,
+            advanced: std::mem::take(&mut self.advanced),
         })
     }
 }
@@ -420,6 +488,18 @@ mod tests {
             s.state == "playing" && s.position_ms > 5200
         });
         let pid = player.child.inner().id();
+        player.seek(11500).unwrap();
+        wait(&mut player, |s| s.state == "stopped");
+        let transition = Instant::now();
+        player.load(&audio).unwrap();
+        wait(&mut player, |s| {
+            s.state == "playing" && s.position_ms < 3000
+        });
+        assert_eq!(player.child.inner().id(), pid);
+        println!(
+            "Local EOF -> same-process replay: {} ms",
+            transition.elapsed().as_millis()
+        );
         println!("Real mpv pause/seek/volume/resume passed with the same owned process {pid}");
     }
 }

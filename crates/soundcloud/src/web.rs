@@ -37,18 +37,23 @@ struct Http {
 }
 
 impl Http {
-    fn new(options: &RequestOptions) -> Self {
+    fn new(
+        options: &RequestOptions,
+        network: Option<&crate::network::NetworkPolicy>,
+    ) -> Result<Self, SoundCloudError> {
         let mut builder = ureq::Agent::config_builder()
             .timeout_global(Some(options.timeout))
             .user_agent(USER_AGENT)
             .http_status_as_error(false);
         // Reuse the same environment-based proxy policy as child processes.
-        if let Some(proxy) = ureq::Proxy::try_from_env() {
-            builder = builder.proxy(Some(proxy));
-        }
-        Self {
+        let proxy = match network {
+            Some(policy) => policy.https_proxy()?,
+            None => ureq::Proxy::try_from_env(),
+        };
+        builder = builder.proxy(proxy);
+        Ok(Self {
             agent: builder.build().into(),
-        }
+        })
     }
 
     fn get(&self, url: &str, options: &RequestOptions) -> Result<(u16, String), SoundCloudError> {
@@ -274,9 +279,10 @@ fn playlist_from_json(value: PlaylistJson) -> Option<Playlist> {
             .track_count
             .filter(|count| *count >= 0)
             .map(|count| count as u32),
-        duration_seconds: value.duration.filter(|seconds| {
-            seconds.is_finite() && *seconds >= 0.0 && *seconds <= 9_007_199_254_741.0
-        }),
+        duration_seconds: value
+            .duration
+            .filter(|ms| ms.is_finite() && *ms >= 0.0)
+            .map(|ms| ms / 1000.0),
         webpage_url: playlist_url(value.permalink_url)?,
     })
 }
@@ -292,7 +298,8 @@ fn track_from_json(value: TrackJson) -> Option<Track> {
         uploader: value.user.and_then(|user| text(user.username)),
         duration_seconds: value
             .duration
-            .filter(|seconds| seconds.is_finite() && *seconds >= 0.0),
+            .filter(|ms| ms.is_finite() && *ms >= 0.0)
+            .map(|ms| ms / 1000.0),
         webpage_url,
         artwork_url: media_url(value.artwork_url),
     })
@@ -324,8 +331,9 @@ pub(crate) fn search(
     options: &RequestOptions,
     query: &str,
     limit: usize,
+    network: Option<&crate::network::NetworkPolicy>,
 ) -> Result<Vec<Playlist>, SoundCloudError> {
-    let http = Http::new(options);
+    let http = Http::new(options, network)?;
     let path = format!("/search/playlists?q={}&limit={limit}", encode(query.trim()));
     // A rejected cached id is dropped once and rediscovered before failing.
     let value = match api_json(&http, &path, options, false) {
@@ -350,8 +358,9 @@ pub(crate) fn search(
 pub(crate) fn playlist(
     options: &RequestOptions,
     playlist_url: &str,
+    network: Option<&crate::network::NetworkPolicy>,
 ) -> Result<(Playlist, Vec<Track>), SoundCloudError> {
-    let http = Http::new(options);
+    let http = Http::new(options, network)?;
     let resolved = match api_json(
         &http,
         &format!("/resolve?url={}", encode(playlist_url)),
@@ -419,8 +428,40 @@ pub(crate) fn playlist(
         }
     }
     let tracks: Vec<Track> = tracks.into_iter().flatten().collect();
-    let _ = (total, playlist.track_count);
     Ok((playlist, tracks))
+}
+
+pub(crate) fn search_tracks(
+    options: &RequestOptions,
+    query: &str,
+    limit: usize,
+    network: Option<&crate::network::NetworkPolicy>,
+) -> Result<Vec<Track>, SoundCloudError> {
+    check_cancelled(options)?;
+    let http = Http::new(options, network)?;
+    let path = format!("/search/tracks?q={}&limit={limit}", encode(query));
+    let value = match api_json(&http, &path, options, false) {
+        Ok(value) => value,
+        Err(SoundCloudError::Network(status))
+            if status == "HTTP status 401" || status == "HTTP status 403" =>
+        {
+            forget_client_id();
+            api_json(&http, &path, options, true)?
+        }
+        Err(error) => return Err(error),
+    };
+    #[derive(Deserialize)]
+    struct Response {
+        collection: Vec<TrackJson>,
+    }
+    let response: Response = serde_json::from_value(value)
+        .map_err(|_| SoundCloudError::InvalidResponse("Unexpected track search response".into()))?;
+    Ok(response
+        .collection
+        .into_iter()
+        .filter_map(track_from_json)
+        .take(limit)
+        .collect())
 }
 
 #[cfg(test)]
@@ -482,5 +523,6 @@ mod tests {
         let track = track_from_json(complete).expect("complete track");
         assert_eq!(track.id, "2362658306");
         assert_eq!(track.title, "Kickflip");
+        assert_eq!(track.duration_seconds, Some(120.0));
     }
 }

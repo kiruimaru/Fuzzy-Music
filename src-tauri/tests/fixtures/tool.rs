@@ -1,5 +1,10 @@
 fn main() {
     let target = std::env::args().last().unwrap();
+    if target.contains("slow_block") {
+        std::thread::sleep(std::time::Duration::from_millis(2500));
+    } else if target.contains("slow") {
+        std::thread::sleep(std::time::Duration::from_millis(800));
+    }
     if target.contains("hang") {
         std::thread::sleep(std::time::Duration::from_secs(10));
     }
@@ -49,6 +54,11 @@ fn initial() -> &'static str {
 
 fn reply(line: &str) -> Option<String> {
     let compact = line.replace(' ', "");
+    if compact.contains("\"loadfile\"") && compact.contains("\"append\"") { return None; }
+    if compact.contains("\"loadfile\"") { return Some(format!("{{\"event\":\"start-file\"}}\n{}", initial())); }
+    if compact.contains("\"seek\",175") {
+        return Some(format!("{{\"event\":\"end-file\",\"reason\":\"eof\"}}\n{{\"event\":\"start-file\"}}\n{}", initial()));
+    }
     let (name, value) = if compact.contains("\"pause\"") && compact.contains("set_property") {
         ("pause", if compact.contains("true") { "true".into() } else { "false".into() })
     } else if compact.contains("\"volume\"") && compact.contains("set_property") {

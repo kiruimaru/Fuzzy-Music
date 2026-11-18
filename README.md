@@ -56,12 +56,19 @@ Team responsibilities are recorded in
 - `docs/architecture` and `docs/decisions`: contracts and durable decisions.
 - `docs/project-context.md`, `docs/ai-log.md`, and `tasks`: current state and
   contributor handoffs.
-- `.github`: issue and PR templates. Automated CI is not configured yet.
+- `.github`: issue/PR templates and Windows alpha build/artifact workflow.
 
 Keep Tauri commands above `crates/application`; the frontend must use
 the documented DTOs. Persistence and the full playback API remain planned.
 
 ## Quick start on Windows x64
+
+For the portable alpha artifact and first-run runtime setup, see
+[Windows alpha](docs/windows-alpha.md). This is the search/Play/Stop slice,
+not the full MVP. Clean-machine verification remains external.
+Choose the **portable** artifact for the small user download; matching GPL
+application and vendored dependency sources are a separate **corresponding-source**
+artifact on the same build, with checksums and Git/executable provenance.
 
 Install Git, Rust stable, and Microsoft C++ Build Tools with Windows SDK.
 From the repository root:

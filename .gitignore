@@ -34,3 +34,4 @@ node_modules/
 /src-tauri/gen/
 /test-results/
 /playwright-report/
+artifacts/

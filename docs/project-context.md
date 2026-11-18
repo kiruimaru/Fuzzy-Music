@@ -1,7 +1,7 @@
 # Fuzzy Music Project Context
 
 **Last reviewed:** 2026-11-17  
-**Status:** source/API merged; shell PR #17 open; Windows network follow-up validated locally
+**Status:** PRs #17/#18 merged; local Windows portable alpha candidate; Linux task #19
 
 ## Product
 
@@ -47,6 +47,15 @@ response formats inside the source adapter.
 
 ## Known state
 
+- Windows alpha packaging/discovery is in local `feat/windows-alpha`; see
+  `../tasks/windows-alpha.md`, decision 0005 and `windows-alpha.md`. Live portable
+  search/Playing/Stop passed with Windows-only PATH and different cwd. Public
+  Portable ZIP supplies npm notices; a separate matching corresponding-source
+  artifact supplies application/locked Rust sources with Git/executable provenance. External
+  mpv/yt-dlp are acquired directly via digest-verified first-run bootstrap because
+  exact transitive mpv source was not available as an upstream bundle. Clean
+  Windows runtime verification remains external. Linux alpha is assigned in #19.
+
 - AI context assembly has offline regression coverage in
   `scripts/test-ai-context.sh`; see `tasks/ai-context-11.md` for scope and limits.
 - The repository and local Rust environment were prepared.
@@ -78,7 +87,7 @@ These are local checks, not CI. Linux native rendering needed
 `WEBKIT_DISABLE_DMABUF_RENDERER=1`; direct SoundCloud access timed out.
 See [`shell-development.md`](shell-development.md) and
 [`../tasks/tauri-shell-14.md`](../tasks/tauri-shell-14.md) for setup and limits.
-CI workflows are not configured.
+Windows alpha PR/manual build and artifact workflow is configured.
 
 ## Agreed work split
 

@@ -83,7 +83,7 @@ impl From<SoundCloudError> for AppError {
             }
             SoundCloudError::Process(_) => (
                 ErrorCode::SourceUnavailable,
-                "Source tool unavailable.",
+                "yt-dlp is missing or cannot start. Run setup-windows-runtime.ps1 beside the app on Windows, or repair FUZZY_YTDLP. See README.md.",
                 false,
             ),
             SoundCloudError::ExtractorFailed { .. } | SoundCloudError::InvalidResponse(_) => {

@@ -1,0 +1,42 @@
+name: Windows alpha
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  portable:
+    runs-on: windows-2022
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+          cache: npm
+      - run: rustup component add rustfmt clippy
+      - run: npm ci
+      - run: cargo fmt --all --check
+      - run: cargo test --workspace --all-targets --locked
+      - run: cargo clippy --workspace --all-targets --locked -- -D warnings
+      - run: npm test
+      - run: powershell -NoProfile -File scripts/package-windows.ps1
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: fuzzy-music-windows-alpha-portable
+          compression-level: 0
+          path: |
+            artifacts/windows-alpha/*Windows x64.zip
+            artifacts/windows-alpha/*Windows x64.zip.sha256
+          if-no-files-found: error
+          retention-days: 14
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: fuzzy-music-windows-alpha-corresponding-source
+          compression-level: 0
+          path: |
+            artifacts/windows-alpha/*corresponding-source.zip
+            artifacts/windows-alpha/*corresponding-source.zip.sha256
+          if-no-files-found: error
+          retention-days: 14

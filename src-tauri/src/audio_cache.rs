@@ -16,7 +16,9 @@ const SEGMENTS: usize = 12;
 const INITIAL_SEGMENTS: usize = 3;
 const MAX_TRACK_BYTES: usize = 3 * 1024 * 1024;
 const MAX_TRACKS: usize = 41; // Current track plus forty neighbours.
-const MAX_CACHE_AGE: Duration = Duration::from_secs(30 * 60);
+// SoundCloud signs stream links for roughly two hours; a 55-minute cap keeps
+// entries comfortably valid at use time while halving refresh storms.
+const MAX_CACHE_AGE: Duration = Duration::from_secs(55 * 60);
 struct Entry {
     key: String,
     valid_until: Instant,
@@ -67,11 +69,10 @@ impl AudioCache {
         }
     }
     pub fn get(&self, key: &str) -> Option<String> {
-        let state = self.state.lock().ok()?;
-        let entry = state
-            .entries
-            .iter()
-            .find(|e| e.key == key && Instant::now() < e.valid_until)?;
+        let mut state = self.state.lock().ok()?;
+        // Expired entries cannot become valid again; drop them on lookup.
+        state.entries.retain(|e| Instant::now() < e.valid_until);
+        let entry = state.entries.iter().find(|e| e.key == key)?;
         let name = entry.files.keys().find(|s| s.ends_with("/index.m3u8"))?;
         Some(format!("{}{name}", self.base))
     }
@@ -388,12 +389,12 @@ mod tests {
         ));
         assert!(link_is_fresh(
             &signed,
-            Instant::now() - Duration::from_secs(901),
+            Instant::now() - Duration::from_secs(3180),
             Duration::from_secs(60)
         ));
         assert!(!link_is_fresh(
             &signed,
-            Instant::now() - Duration::from_secs(1801),
+            Instant::now() - Duration::from_secs(3361),
             Duration::from_secs(60)
         ));
     }

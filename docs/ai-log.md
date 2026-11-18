@@ -392,3 +392,12 @@ the minimal Tauri shell.
 
 - Increased the upper bound for signed links and HLS audio from 15 to 30 minutes, preserving expiry checks and the safety margin.
 - Added boundary coverage for both the old and new limits; user confirmed the preceding playback behavior.
+
+## 2026-11-19 — Lookahead resource limits
+
+- Investigated a user report of system-wide lag and FPS drops during long playlist sessions; live probes showed signed links stay valid for about two hours, so the 30-minute cap caused periodic storms of up to 40 extractor launches plus hundreds of segment downloads.
+- Raised the cache cap to 55 minutes, dropped expired entries on lookup, and bounded extractor launches to 16 per cycle with leftovers deferred to the next 45-second cycle.
+- Limited RAM audio warming to the 3 nearest neighbours; the rest of the 40-track lookahead stores links only, and mpv demuxer caches now have explicit byte caps.
+- Updated the freshness boundary test to straddle the new 3300-second cap; decision recorded in `docs/decisions/0008-lookahead-resource-limits.md`.
+- Verification: cargo fmt clean; `cargo test --workspace --all-targets --locked` all passed; frontend untouched.
+

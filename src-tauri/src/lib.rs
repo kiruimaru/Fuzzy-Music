@@ -10,9 +10,19 @@ use fuzzy_soundcloud::SoundCloudClient;
 use serde::Serialize;
 use std::{
     path::PathBuf,
-    sync::{Arc, Condvar, Mutex},
+    sync::{
+        Arc, Condvar, Mutex,
+        atomic::{AtomicUsize, Ordering},
+    },
 };
 use tauri::Manager;
+
+/// Nearest neighbours whose audio startup segments are kept in RAM; links only
+/// are cached for the rest of the lookahead.
+const WARM_NEIGHBOURS: usize = 3;
+/// Extractor launches allowed per lookahead cycle. The remaining tracks defer
+/// to the next cycle so re-resolve storms stay short and spread out.
+const RESOLVE_BUDGET: usize = 16;
 
 fn internal() -> AppError {
     AppError {
@@ -483,22 +493,28 @@ impl Shell {
             requests
                 .into_iter()
                 .filter(|request| seen.insert(request.track_url.clone()))
+                .enumerate()
+                .map(|(index, request)| (request, index < WARM_NEIGHBOURS))
                 .collect::<std::collections::VecDeque<_>>(),
         );
+        // Only a bounded number of extractor runs per cycle; leftover tracks
+        // are retried by the next periodic lookahead request.
+        let resolves = AtomicUsize::new(RESOLVE_BUDGET);
         std::thread::scope(|scope| {
             for _ in 0..8 {
                 let options = &options;
                 let pending = &pending;
+                let resolves = &resolves;
                 scope.spawn(move || {
                     loop {
-                        let request = {
+                        let (request, warm) = {
                             let Ok(mut pending) = pending.lock() else {
                                 return;
                             };
-                            let Some(request) = pending.pop_front() else {
+                            let Some((request, warm)) = pending.pop_front() else {
                                 return;
                             };
-                            request
+                            (request, warm)
                         };
                         let cached = {
                             let Ok(mut control) = self.control.lock() else {
@@ -523,10 +539,23 @@ impl Shell {
                         let url = request.track_url.clone();
                         let (stream, resolved_at) = match cached {
                             Some(cached) => cached,
-                            None => match self.application.resolve_track(request, options) {
-                                Ok(stream) => (stream, std::time::Instant::now()),
-                                Err(_) => continue,
-                            },
+                            None => {
+                                // Stop launching extractors once the cycle
+                                // budget is spent; deferred tracks are retried
+                                // by the next lookahead cycle.
+                                if resolves
+                                    .try_update(Ordering::SeqCst, Ordering::SeqCst, |value| {
+                                        value.checked_sub(1)
+                                    })
+                                    .is_err()
+                                {
+                                    return;
+                                }
+                                match self.application.resolve_track(request, options) {
+                                    Ok(stream) => (stream, std::time::Instant::now()),
+                                    Err(_) => continue,
+                                }
+                            }
                         };
                         let Ok(mut control) = self.control.lock() else {
                             return;
@@ -543,7 +572,8 @@ impl Shell {
                             .cached_streams
                             .push((url.clone(), stream, resolved_at));
                         drop(control);
-                        if !options.cancellation.is_cancelled()
+                        if warm
+                            && !options.cancellation.is_cancelled()
                             && let Some(cache) = &self.audio_cache
                         {
                             cache.warm_cancellable(&url, &stream_url, &options.cancellation);

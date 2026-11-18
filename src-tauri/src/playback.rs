@@ -95,6 +95,8 @@ impl Player {
             "--input-default-bindings=no",
             "--ytdl=no",
             "--network-timeout=15",
+            "--demuxer-max-bytes=16M",
+            "--demuxer-max-back-bytes=4M",
             "--volume=100",
             "--idle=yes",
             "--gapless-audio=yes",

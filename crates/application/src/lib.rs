@@ -21,6 +21,7 @@ pub struct Track {
 #[serde(rename_all = "lowercase")]
 pub enum Source {
     Soundcloud,
+    Local,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -248,6 +249,13 @@ impl Application {
             Source::Soundcloud => self
                 .soundcloud
                 .resolve_with_options(&request.track_url, options)?,
+            Source::Local => {
+                return Err(AppError {
+                    code: ErrorCode::InvalidInput,
+                    message: "Local tracks must be opened from the music library.".into(),
+                    retryable: false,
+                });
+            }
         };
         Ok(ResolveTrackResponse {
             track: stream.track.into(),
@@ -280,6 +288,13 @@ impl Application {
             Source::Soundcloud => self
                 .soundcloud
                 .playlist_tracks_with_options(&request.playlist_url, options)?,
+            Source::Local => {
+                return Err(AppError {
+                    code: ErrorCode::InvalidInput,
+                    message: "Local source playlists are not supported.".into(),
+                    retryable: false,
+                });
+            }
         };
         let skipped_track_count = result
             .playlist

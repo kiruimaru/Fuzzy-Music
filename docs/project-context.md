@@ -1,7 +1,7 @@
 # Fuzzy Music Project Context
 
 **Last reviewed:** 2026-11-19
-**Status:** session queue implemented for #22; settings integration/review and platform acceptance remain
+**Status:** session queue, local favourites/settings and music library implemented locally; contributor and platform review remain
 
 ## Product
 
@@ -20,7 +20,7 @@ The first release must support:
 - local favourites;
 - persisted settings.
 
-Saved/custom playlists, history, and additional themes are post-MVP.
+Saved/custom playlists and history are post-MVP. Settings include dark and light themes.
 Public source playlist discovery and playback are already implemented.
 
 ## Architecture
@@ -59,13 +59,18 @@ response formats inside the source adapter.
 - PR #23 adds public SoundCloud playlist discovery, a playlist playback queue,
   previous/next, automatic transitions, link lookahead and HLS startup caching,
   along with mpv JSON IPC pause/resume, seek and volume. Saved playlists,
-  favourites and persisted settings remain unfinished. #22 now adds an independent
+  #22 now adds an independent
   editable session queue with fresh per-entry resolution, EOF/boundary behavior,
   stop-on-current-removal and a typed volume settings port. The port currently
-  uses an in-memory adapter until #21 supplies persistence; no second database
-  was introduced. Public playlist playback keeps its existing prepared sequence.
+  now uses the local SQLite settings port. Public playlist playback keeps its existing prepared sequence.
   See `../tasks/playback-queue-22.md` and decision 0009. Human listening,
   Windows acceptance and contributor review remain; #22 is not closed.
+- User explicitly expanded scope to disk downloads and a local music folder.
+  One SQLite database owns favourites/settings/index; one bounded worker
+  downloads liked SoundCloud tracks using the configured quality preference.
+  Files are kept when unliked, scanned at startup, and playable offline.
+  Settings and implementation overlap #21 and need Maroi9p coordination.
+  See `../tasks/favourites-local-library.md` and decision 0010.
 - PRs #20 (Windows alpha) and #23 (playback controls, public playlists and
   transitions) were reviewed at heads `82bafc8` and `cfa6c69`. Their normal
   Rust/frontend checks pass, but additional reproductions expose cache limits,
@@ -157,11 +162,11 @@ review findings, contributor contract review, and release/tool packaging decisio
 
 ## Open decisions
 
-- Contributor agreement on #21 volume settings port, durable integration and
-  remaining #22 human/platform acceptance.
+- Contributor review/coordination of #21 overlapping storage implementation and
+  remaining #22 and library platform acceptance.
 - Linux release dependency discovery/setup; #20 currently requires beside-app
   tools for release builds on Linux too, with explicit FUZZY overrides as a workaround.
-- SQLite schema and migration strategy.
+- SQLite schema migration review and future migration strategy beyond version 1.
 - Minimum supported Windows and Linux versions.
 - CI matrix and release artifact format.
 

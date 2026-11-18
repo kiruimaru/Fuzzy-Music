@@ -3,11 +3,13 @@ use serde_json::Value;
 use std::{path::PathBuf, process::Command};
 
 mod control;
+mod download;
 mod error;
 pub mod network;
 mod process;
 mod web;
 pub use control::{CancellationToken, RequestOptions};
+pub use download::DownloadQuality;
 pub use error::SoundCloudError;
 
 #[derive(Debug, Serialize)]

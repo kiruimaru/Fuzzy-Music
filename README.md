@@ -11,7 +11,10 @@ See [desktop setup and verification](docs/shell-development.md).
 The player supports pause/resume, position/seek and volume through mpv JSON IPC. See
 [`tasks/playback-controls.md`](tasks/playback-controls.md) for verification and
 remaining limitations. Playlist playback supports previous/next and automatic
-transitions; independent queue editing and persistence remain unfinished.
+transitions. A separate session queue supports adding search results, selecting
+and removing entries, Previous/Next and automatic advancement without repeat.
+Removing the current entry stops playback and leaves the next choice to the user.
+Queue persistence is outside the MVP; durable volume storage awaits #21.
 
 A dark Spotify-style shell also adds public SoundCloud **playlist search**:
 search playlists, open one and play its tracks through the same player. It uses
@@ -20,6 +23,8 @@ cannot search playlists. See decision 0006 and
 [`tasks/playlist-search.md`](tasks/playlist-search.md). Saved playlists are not
 implemented. Integration checks and accepted review follow-ups are recorded in
 [`tasks/pr20-pr23-integration.md`](tasks/pr20-pr23-integration.md).
+Session queue behavior and #22 acceptance are recorded in
+[`tasks/playback-queue-22.md`](tasks/playback-queue-22.md).
 
 ## Project goals
 

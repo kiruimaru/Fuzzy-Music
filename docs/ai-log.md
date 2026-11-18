@@ -1,5 +1,51 @@
 # AI Work Log
 
+## 2026-11-19 | Agent: Codex | Task: playback-queue-22
+
+### Goal
+
+Implement issue #22 on top of the reviewed playback/playlist integration.
+
+### Changed
+
+- Added an independent session queue with stable entry keys, duplicate support,
+  selection/removal, Previous/Next, EOF advancement and no wraparound.
+- Stop/search retain the queue; deleting current cancels/stops without choosing
+  a successor. Errors wait for manual selection rather than infinite retries.
+- Session tracks resolve fresh and drop the previous player before resolution.
+  Existing public playlist playback keeps its prepared transition sequence.
+- Added the typed #21 settings port and an explicitly temporary memory adapter.
+  Preferred volume is passed at player startup, retained on Stop and saved
+  through serialized port writes. No second persistence store was introduced.
+- Updated contracts/context and decision 0009; task: `playback-queue-22.md`.
+
+### Checks
+
+- Locked workspace/all-target Rust tests: 47 passed, 4 ignored.
+- Strict all-target Clippy, rustfmt, context smoke and Bash syntax passed.
+- Frontend: 26 tests, TypeScript/Vite build and six Chromium UI tests passed.
+  Queue screenshots checked at 1000px and 320px; player remains visible.
+- Native Tauri debug no-bundle build passed.
+- Real mpv/local WAV with null output passed initial volume, pause/seek/volume/
+  resume and EOF/replay. It does not establish human audibility.
+- The earlier combined-main Windows workflow 44389261965 completed successfully;
+  this is base integration evidence, not Windows verification of #22.
+
+### Decisions
+
+- Current-entry removal stops without auto-selection; queue is session-only.
+- Keep #21 storage ownership; proposed volume IPC names await contributor review.
+
+### Open questions
+
+- #21 persistent settings adapter, human listening, Windows and contributor review.
+- Earlier source-playlist cache/HTTP lifecycle findings remain separate follow-ups.
+
+### Next action
+
+Publish a focused PR referencing #22, perform human native queue acceptance, and
+connect #21's storage API when available. Keep #22 open pending acceptance.
+
 ## 2026-11-19 | Agent: Codex | Task: pr20-pr23-integration
 
 ### Goal

@@ -1,7 +1,7 @@
 # Fuzzy Music Project Context
 
 **Last reviewed:** 2026-11-19
-**Status:** playback controls, playlist transitions and Windows alpha integrated; review follow-ups remain
+**Status:** session queue implemented for #22; settings integration/review and platform acceptance remain
 
 ## Product
 
@@ -59,8 +59,13 @@ response formats inside the source adapter.
 - PR #23 adds public SoundCloud playlist discovery, a playlist playback queue,
   previous/next, automatic transitions, link lookahead and HLS startup caching,
   along with mpv JSON IPC pause/resume, seek and volume. Saved playlists,
-  independent queue editing, favourites and persisted settings remain unfinished.
-  Issue #22 is not closed by integration.
+  favourites and persisted settings remain unfinished. #22 now adds an independent
+  editable session queue with fresh per-entry resolution, EOF/boundary behavior,
+  stop-on-current-removal and a typed volume settings port. The port currently
+  uses an in-memory adapter until #21 supplies persistence; no second database
+  was introduced. Public playlist playback keeps its existing prepared sequence.
+  See `../tasks/playback-queue-22.md` and decision 0009. Human listening,
+  Windows acceptance and contributor review remain; #22 is not closed.
 - PRs #20 (Windows alpha) and #23 (playback controls, public playlists and
   transitions) were reviewed at heads `82bafc8` and `cfa6c69`. Their normal
   Rust/frontend checks pass, but additional reproductions expose cache limits,
@@ -152,7 +157,8 @@ review findings, contributor contract review, and release/tool packaging decisio
 
 ## Open decisions
 
-- Independent queue editing and remaining full playback API work (issue #22).
+- Contributor agreement on #21 volume settings port, durable integration and
+  remaining #22 human/platform acceptance.
 - Linux release dependency discovery/setup; #20 currently requires beside-app
   tools for release builds on Linux too, with explicit FUZZY overrides as a workaround.
 - SQLite schema and migration strategy.

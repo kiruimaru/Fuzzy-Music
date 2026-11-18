@@ -149,13 +149,13 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 
 .results { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 6px 6px 10px; }
 .results-head {
-  display: grid; grid-template-columns: 32px 44px minmax(0, 1fr) 56px 44px;
+  display: grid; grid-template-columns: 32px 44px minmax(0, 1fr) 56px 36px 36px;
   align-items: center; gap: 12px; padding: 10px 12px 6px;
   font-size: 11px; text-transform: uppercase; letter-spacing: .1em; color: #66708a;
 }
 .results ul { list-style: none; margin: 0; padding: 0; }
 .results li {
-  display: grid; grid-template-columns: 32px 44px minmax(0, 1fr) 56px 44px;
+  display: grid; grid-template-columns: 32px 44px minmax(0, 1fr) 56px 36px 36px;
   align-items: center; gap: 12px; padding: 8px 12px; border-radius: 10px;
 }
 .results li:hover { background: var(--panel-2); }
@@ -172,6 +172,17 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 }
 .row-play:hover { background: var(--accent); border-color: var(--accent); color: #10131a; }
 .row-play svg, .icon-btn svg { width: 16px; height: 16px; fill: currentColor; }
+.row-play svg.lucide { fill: none; }
+.row-play:disabled { opacity: .4; }
+
+.session-queue h2 { margin: 0 0 16px; font-size: 20px; }
+.session-queue ol { list-style: none; padding: 0; margin: 0; }
+.session-queue li {
+  display: grid; grid-template-columns: 44px minmax(0, 1fr) 36px 36px;
+  align-items: center; gap: 12px; padding: 10px 0;
+  border-bottom: 1px solid var(--line);
+}
+.session-queue li[aria-current] { background: var(--panel-2); }
 
 .artwork { flex: none; border-radius: 6px; object-fit: cover; background: #232a39; }
 .artwork-small { width: 44px; height: 44px; }
@@ -256,7 +267,8 @@ input[type="range"]:disabled::-webkit-slider-thumb { cursor: default; }
 
 @media (max-width: 560px) {
   .results-head { display: none; }
-  .results li { grid-template-columns: 40px minmax(0, 1fr) 36px; gap: 10px; }
+  .results li { grid-template-columns: 40px minmax(0, 1fr) 36px 36px; gap: 6px; padding: 8px 4px; }
+  .session-queue li { grid-template-columns: 40px minmax(0, 1fr) 36px 36px; gap: 6px; }
   .row-index, .row-duration { display: none; }
   .timeline, .volume { grid-template-columns: minmax(0, 1fr) 76px; }
   .timeline label, .volume label { grid-column: 1 / -1; }

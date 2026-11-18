@@ -160,7 +160,7 @@ The minimal shell commands are:
 ```ts
 search_tracks({ generation, request: SearchTracksRequest }): Promise<SearchTracksResponse>
 cancel_search({ generation }): Promise<void>
-play_track({ generation, request: ResolveTrackRequest }): Promise<void>
+play_track({ generation, request: ResolveTrackRequest, fresh?: boolean, volume?: number }): Promise<void>
 stop_playback({ generation }): Promise<void>
 playback_status(): Promise<{
   generation: number;
@@ -200,7 +200,10 @@ Seek requires known duration and seekability; position is clamped to duration.
 The action's `position_ms` field is explicitly snake_case on this IPC command;
 status fields remain camelCase. Successful command submission is not an
 optimistic state change: observed mpv properties drive the next snapshot.
-Volume is not persisted and currently resets to 100 on a new Play.
+Volume must be finite and within 0..100. `play_track` accepts the preferred
+volume and passes it to mpv at process startup; omitted volume uses the last
+snapshot volume (100 initially). Stop preserves volume. The current settings
+adapter is in-memory; durable persistence belongs to #21.
 
 ```ts
 type PlaybackState =
@@ -212,18 +215,66 @@ type PlaybackState =
   | "error";
 
 type PlaybackSnapshot = {
+  generation: number;
   state: PlaybackState;
   trackId: string | null;
   positionMs: number;
   durationMs: number | null;
   volume: number;
+  seekable: boolean;
   error: string | null;
+  transitions: number;
 };
 ```
 
 Playback commands should be small and explicit: load a track, play, pause,
 seek, set volume, and stop. The UI consumes snapshots/events and does not
 manage the mpv process directly.
+
+## Session queue
+
+The frontend owns a temporary ordered sequence of `{ key, track: Track }`
+entries; duplicate Tracks have different entry keys. No queue or source-specific
+response shape crosses IPC. Add appends without playing; Play on a track-search
+result appends and selects. Search and browsing do not clear the queue.
+Selection and Previous/Next have no wraparound. Stop preserves list/selection.
+Deleting the current entry stops/cancels playback and clears selection; another
+entry must be selected explicitly. Removing another entry preserves playback.
+
+Session queue play commands set `fresh: true`: each new track resolves at launch,
+ignoring prepared/cached stream links and HLS audio. Rust stops the old player
+before resolving the replacement, cancels old preparation/lookahead, and rejects
+late work through playback generations. No audio warmers are spawned in this
+mode. EOF selects the next entry once, or remains stopped after the last.
+An error disables automatic advancement and does not retry/skip without user
+action. Existing public playlist playback keeps its own prepared transition
+sequence; adding to the session queue does not edit that source sequence.
+See decision 0009.
+
+## Settings Port For #21
+
+The following TypeScript contract is implemented by an injectable frontend port:
+
+```ts
+type AppSettings = { volume: number };
+interface SettingsStore {
+  getSettings(): Promise<AppSettings>;
+  updateSettings(settings: AppSettings): Promise<AppSettings>;
+}
+```
+
+Default volume is 100; values must be finite within 0..100. Updates return the
+committed settings. Proposed Tauri mapping for #21 contributor review:
+`get_settings(): Promise<AppSettings>` and
+`update_settings({ settings: AppSettings }): Promise<AppSettings>`.
+These commands are not yet registered. #21 owns SQLite and safe `storage_failed`
+errors; #22 owns applying volume to mpv. Other settings should be extended with
+an explicit patch contract before parallel writers are introduced.
+
+The current production port stores volume only in memory. UI waits for its
+initial read before Play, serializes writes, shows safe load/save failures,
+and falls back to 100 on read failure without writing over stored data.
+No temporary stream URL belongs in settings.
 
 ## Error shape
 

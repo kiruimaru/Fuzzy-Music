@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { api, safeMessage, type Playlist, type Track } from "./api";
+import { ListPlus, Trash2 } from "lucide-react";
+import { settingsStore, validVolume, type SettingsStore } from "./settings";
 
 // Keep new webview sessions newer than requests retained by the Rust process.
 const generationBase = Date.now() * 1000;
@@ -29,8 +31,10 @@ function StopIcon() {
   return <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M6.5 6.5h11v11h-11z" /></svg>;
 }
 
-export function App() {
-  const [view, setView] = useState<"tracks" | "playlists">("tracks");
+type QueueEntry = { key: number; track: Track };
+
+export function App({ settings = settingsStore }: { settings?: SettingsStore }) {
+  const [view, setView] = useState<"tracks" | "playlists" | "queue">("tracks");
   const [query, setQuery] = useState("");
   const [tracks, setTracks] = useState<Track[]>([]);
   const [playlists, setPlaylists] = useState<Playlist[]>([]);
@@ -60,12 +64,38 @@ export function App() {
   const autoAdvance = useRef(false);
   const prepareGeneration = useRef(generationBase);
   const preparedKey = useRef("");
-  const retryPreparationAfter = useRef(0);
   const observedTransitions = useRef(0);
   const lookaheadGeneration = useRef(generationBase);
   const lookaheadKey = useRef("");
   const lookaheadTime = useRef(0);
   const lookaheadPending = useRef(false);
+  const [sessionQueue, setSessionQueue] = useState<QueueEntry[]>([]);
+  const sessionQueueRef = useRef<QueueEntry[]>([]);
+  const entryKey = useRef(0);
+  const playbackOrigin = useRef<"session" | "playlist">("session");
+  const [settingsReady, setSettingsReady] = useState(false);
+  const settingsLoaded = useRef(false);
+  const [settingsError, setSettingsError] = useState("");
+  const preferredVolume = useRef(100);
+  const settingsWrites = useRef(Promise.resolve());
+
+  useEffect(() => {
+    let disposed = false;
+    void settings.getSettings().then(value => {
+      if (!validVolume(value.volume)) throw { code: "storage_failed" };
+      if (disposed) return;
+      preferredVolume.current = value.volume;
+      setVolume(value.volume);
+    }).catch(() => {
+      if (!disposed) setSettingsError("Could not load volume settings.");
+    }).finally(() => {
+      if (!disposed) {
+        settingsLoaded.current = true;
+        setSettingsReady(true);
+      }
+    });
+    return () => { disposed = true; };
+  }, [settings]);
 
   useEffect(() => {
     let disposed = false;
@@ -87,7 +117,6 @@ export function App() {
               setQueueIndex(nextIndex);
               setSelected(next);
               preparedKey.current = "";
-              retryPreparationAfter.current = 0;
             }
           }
           setPlayback(status.state === "loading" ? "starting" : status.state);
@@ -95,8 +124,9 @@ export function App() {
           setDuration(status.durationMs ?? null);
           setVolume(status.volume ?? 100);
           setSeekable(status.seekable ?? false);
-          setPlayError(status.state === "error" ? status.error ?? "Playback failed. Please retry." : "");
-          if (status.state === "playing" || status.state === "paused") {
+          if (status.state === "error") setPlayError(status.error ?? "Playback failed. Please retry.");
+          if (status.state === "error") autoAdvance.current = false;
+          if (playbackOrigin.current === "playlist" && (status.state === "playing" || status.state === "paused")) {
             const next = queueRef.current[indexRef.current + 1];
             const neighbours: Track[] = [];
             for (let distance = 1; distance <= 40 && neighbours.length < 40; distance++) {
@@ -119,13 +149,13 @@ export function App() {
             const remaining = status.durationMs === null ? Infinity : status.durationMs - status.positionMs;
             // Resolve close to the transition so signed URLs do not sit unused
             // for an entire long track. Pause suspends speculative work.
-            if (status.state === "playing" && next && remaining <= 30000 && preparedKey.current !== next.sourceUrl && Date.now() >= retryPreparationAfter.current) {
+            if (autoAdvance.current && status.state === "playing" && next && remaining <= 30000 && preparedKey.current !== next.sourceUrl) {
               preparedKey.current = next.sourceUrl;
               const preparation = ++prepareGeneration.current;
               void api.prepare(preparation, next, generation).catch(() => {
                 if (preparation === prepareGeneration.current && generation === playbackGeneration.current) {
-                  preparedKey.current = "";
-                  retryPreparationAfter.current = Date.now() + 2000;
+                  setPlayError(safeMessage({ code: "playback_failed" }));
+                  autoAdvance.current = false;
                 }
               });
             }
@@ -170,7 +200,7 @@ export function App() {
     void api.cancelPlaylists(++playlistGeneration.current).catch(() => {});
   }
 
-  function switchView(next: "tracks" | "playlists") {
+  function switchView(next: "tracks" | "playlists" | "queue") {
     setView(next);
     setOpenPlaylist(null);
     setSearchState("idle");
@@ -246,20 +276,18 @@ export function App() {
   }
 
   async function play(track: Track, fromQueue = false) {
+    if (!settingsLoaded.current) return;
     if (!fromQueue) {
-      autoAdvance.current = false;
-      queueRef.current = [];
-      indexRef.current = -1;
-      setQueue([]);
-      setQueueIndex(-1);
+      const entry = addToQueue(track);
+      selectQueue(entry.key);
+      return;
     }
     preparedKey.current = "";
-    if (!fromQueue) {
+    if (playbackOrigin.current === "session") {
       ++lookaheadGeneration.current;
       lookaheadPending.current = false;
       lookaheadKey.current = "";
     }
-    retryPreparationAfter.current = 0;
     observedTransitions.current = 0;
     const generation = ++playbackGeneration.current;
     resolving.current = true;
@@ -270,11 +298,16 @@ export function App() {
     setDuration(null);
     setSeekDraft(null);
     setVolumeDraft(null);
+    setControlling(false);
     try {
-      await api.play(generation, track);
+      await api.play(generation, track, {
+        fresh: playbackOrigin.current === "session",
+        volume: preferredVolume.current,
+      });
       if (generation === playbackGeneration.current) setPlayback("starting");
     } catch (error) {
       if (generation !== playbackGeneration.current) return;
+      autoAdvance.current = false;
       setPlayback("error");
       setPlayError(safeMessage(error));
     } finally {
@@ -285,16 +318,26 @@ export function App() {
   async function stop() {
     autoAdvance.current = false;
     preparedKey.current = "";
+    ++lookaheadGeneration.current;
+    lookaheadPending.current = false;
+    lookaheadKey.current = "";
     void api.cancelPreparation(++prepareGeneration.current).catch(() => {});
     const generation = ++playbackGeneration.current;
     resolving.current = false;
     setPlayback("stopping");
+    setControlling(false);
     setPlayError("");
     setSeekDraft(null);
     setVolumeDraft(null);
     try {
       await api.stop(generation);
-      if (generation === playbackGeneration.current) setPlayback("stopped");
+      if (generation === playbackGeneration.current) {
+        setPlayback("stopped");
+        setPosition(0);
+        setDuration(null);
+        setSeekable(false);
+        setVolume(preferredVolume.current);
+      }
     } catch (error) {
       if (generation !== playbackGeneration.current) return;
       setPlayback("error");
@@ -303,13 +346,60 @@ export function App() {
   }
 
   function playPlaylist(startIndex = 0) {
-    if (!tracks.length) return;
+    if (!tracks.length || !settingsReady) return;
+    ++lookaheadGeneration.current;
+    lookaheadPending.current = false;
+    lookaheadKey.current = "";
+    playbackOrigin.current = "playlist";
     queueRef.current = [...tracks];
     indexRef.current = startIndex;
     setQueue([...tracks]);
     setQueueIndex(startIndex);
     autoAdvance.current = true;
     void play(tracks[startIndex], true);
+  }
+
+  function addToQueue(track: Track) {
+    const entry = { key: ++entryKey.current, track };
+    sessionQueueRef.current = [...sessionQueueRef.current, entry];
+    setSessionQueue(sessionQueueRef.current);
+    if (playbackOrigin.current === "session") {
+      queueRef.current = sessionQueueRef.current.map(item => item.track);
+      setQueue(queueRef.current);
+    }
+    return entry;
+  }
+
+  function selectQueue(key: number) {
+    if (!settingsReady) return;
+    const index = sessionQueueRef.current.findIndex(entry => entry.key === key);
+    if (index < 0) return;
+    playbackOrigin.current = "session";
+    queueRef.current = sessionQueueRef.current.map(entry => entry.track);
+    indexRef.current = index;
+    setQueue(queueRef.current);
+    setQueueIndex(index);
+    autoAdvance.current = true;
+    void play(queueRef.current[index], true);
+  }
+
+  function removeFromQueue(key: number) {
+    const index = sessionQueueRef.current.findIndex(entry => entry.key === key);
+    if (index < 0) return;
+    sessionQueueRef.current = sessionQueueRef.current.filter(entry => entry.key !== key);
+    setSessionQueue(sessionQueueRef.current);
+    if (playbackOrigin.current !== "session") return;
+    queueRef.current = sessionQueueRef.current.map(entry => entry.track);
+    setQueue(queueRef.current);
+    if (index === indexRef.current) {
+      indexRef.current = -1;
+      setQueueIndex(-1);
+      setSelected(null);
+      void stop();
+    } else if (index < indexRef.current) {
+      indexRef.current--;
+      setQueueIndex(indexRef.current);
+    }
   }
 
   function skipQueue(direction: number) {
@@ -331,7 +421,24 @@ export function App() {
     try { await operation(generation); }
     catch (error) {
       if (generation === playbackGeneration.current) setPlayError(safeMessage(error));
-    } finally { setControlling(false); }
+    } finally { if (generation === playbackGeneration.current) setControlling(false); }
+  }
+
+  async function changeVolume(value: number) {
+    if (!validVolume(value)) return;
+    const generation = playbackGeneration.current;
+    setVolumeDraft(null);
+    try {
+      await api.volume(generation, value);
+      preferredVolume.current = value;
+      // Serialize persistence so a slower older write cannot win over a newer one.
+      settingsWrites.current = settingsWrites.current.then(async () => {
+        await settings.updateSettings({ volume: value });
+        setSettingsError("");
+      }).catch(() => setSettingsError("Could not save volume settings."));
+    } catch (error) {
+      if (generation === playbackGeneration.current) setPlayError(safeMessage(error));
+    }
   }
 
   const statusText =
@@ -360,9 +467,11 @@ export function App() {
           onClick={() => switchView("tracks")}>Tracks</button>
         <button role="tab" aria-selected={view === "playlists"} className={view === "playlists" ? "tab active" : "tab"}
           onClick={() => switchView("playlists")}>Playlists</button>
+        <button role="tab" aria-selected={view === "queue"} className={view === "queue" ? "tab active" : "tab"}
+          onClick={() => switchView("queue")}>Queue ({sessionQueue.length})</button>
       </div>
 
-      <form className="search" onSubmit={search}>
+      {view !== "queue" && <form className="search" onSubmit={search}>
         <label className="sr-only" htmlFor="query">{view === "tracks" ? "Track or artist" : "Playlist name"}</label>
         <span className="search-icon" aria-hidden="true">⌕</span>
         <input id="query" value={query}
@@ -374,9 +483,9 @@ export function App() {
           void api.cancelPlaylists(++playlistGeneration.current).catch(() => {});
           setSearchState("cancelled");
         }}>Cancel</button>}
-      </form>
+      </form>}
 
-      <p className="results-status" role="status" aria-live="polite">
+      {view !== "queue" && <p className="results-status" role="status" aria-live="polite">
         {searchState === "idle" ? "Ready" :
          searchState === "searching" ? "Searching..." :
          searchState === "empty" ? (view === "tracks" ? "No tracks found." : "No playlists found.") :
@@ -384,7 +493,25 @@ export function App() {
          searchState === "error" ? searchError :
          view === "playlists" ? `${playlists.length} ${playlists.length === 1 ? "playlist" : "playlists"}` :
          `${tracks.length} ${tracks.length === 1 ? "track" : "tracks"}`}
-      </p>
+      </p>}
+
+      {view === "queue" && <section className="session-queue" aria-label="Session queue">
+        <h2>Queue</h2>
+        {!sessionQueue.length && <p className="results-status">Queue is empty.</p>}
+        <ol>
+          {sessionQueue.map((entry, index) => {
+            const current = playbackOrigin.current === "session" && queueIndex === index;
+            return <li key={entry.key} aria-current={current ? "true" : undefined}>
+              <Artwork track={entry.track} size="small" />
+              <div className="row-text"><strong>{entry.track.title}</strong><span>{entry.track.author}</span></div>
+              <button className="row-play" disabled={!settingsReady} title={`Play queued ${entry.track.title}`}
+                aria-label={`Play queued ${entry.track.title}`} onClick={() => selectQueue(entry.key)}><PlayIcon /></button>
+              <button className="row-play" title={`Remove ${entry.track.title} from queue`}
+                aria-label={`Remove ${entry.track.title} from queue`} onClick={() => removeFromQueue(entry.key)}><Trash2 /></button>
+            </li>;
+          })}
+        </ol>
+      </section>}
 
       {view === "playlists" && !openPlaylist &&
         <section aria-label="Playlist results" className="playlist-grid">
@@ -430,12 +557,12 @@ export function App() {
                 </p>}
             </div>
           </div>
-          <button className="primary" onClick={() => playPlaylist() } disabled={!tracks.length}>Play playlist</button>
+          <button className="primary" onClick={() => playPlaylist() } disabled={!tracks.length || !settingsReady}>Play playlist</button>
         </section>}
 
-      {tracks.length > 0 &&
+      {view !== "queue" && tracks.length > 0 &&
         <section aria-label="Search results" className="results">
-          <div className="results-head"><span>#</span><span>Title</span><span>Time</span><span /></div>
+          <div className="results-head"><span>#</span><span /><span>Title</span><span>Time</span><span /><span /></div>
           <ul>
             {tracks.map((track, index) => {
               const current = selected?.id === track.id;
@@ -447,7 +574,9 @@ export function App() {
                   <span>{track.author}</span>
                 </div>
                 <span className="row-duration">{track.durationMs === null ? "--:--" : time(track.durationMs)}</span>
-                <button className="row-play" onClick={() => openPlaylist ? playPlaylist(index) : void play(track)} aria-label={`Play ${track.title}`}>
+                <button className="row-play" title={`Add ${track.title} to queue`}
+                  onClick={() => addToQueue(track)} aria-label={`Add ${track.title} to queue`}><ListPlus /></button>
+                <button className="row-play" disabled={!settingsReady} title={`Play ${track.title}`} onClick={() => openPlaylist ? playPlaylist(index) : void play(track)} aria-label={`Play ${track.title}`}>
                   <PlayIcon />
                 </button>
               </li>;
@@ -455,7 +584,7 @@ export function App() {
           </ul>
         </section>}
 
-      {tracks.length === 0 && searchState === "idle" &&
+      {view !== "queue" && tracks.length === 0 && searchState === "idle" &&
         <section className="empty-state">
           <h2>{view === "tracks" ? "Find something to play" : "Find a playlist"}</h2>
           <p>{view === "tracks"
@@ -476,7 +605,7 @@ export function App() {
       <div className="transport">
         <p className="transport-status" role="status" aria-live="polite">{statusText}</p>
         <div className="transport-buttons">
-          <button className="ghost small" disabled={queueIndex <= 0} onClick={() => skipQueue(-1)} aria-label="Previous track">‹</button>
+          <button className="ghost small" disabled={!settingsReady || queueIndex <= 0} onClick={() => skipQueue(-1)} aria-label="Previous track">‹</button>
           <button className="icon-btn" disabled={!active || controlling}
             aria-label={playback === "paused" ? "Resume" : "Pause"}
             onClick={() => void control(generation => api.pause(generation, playback !== "paused"))}>
@@ -485,8 +614,11 @@ export function App() {
           <button className="icon-btn" onClick={() => void stop()} disabled={playback === "stopping"} aria-label="Stop">
             <StopIcon />
           </button>
-          {selected && <button className="ghost small" onClick={() => void play(selected)}>Play again</button>}
-          <button className="ghost small" disabled={queueIndex < 0 || queueIndex + 1 >= queue.length} onClick={() => skipQueue(1)} aria-label="Next track">›</button>
+          {selected && <button className="ghost small" disabled={!settingsReady} onClick={() => {
+            autoAdvance.current = true;
+            void play(selected, true);
+          }}>Play again</button>}
+          <button className="ghost small" disabled={!settingsReady || queueIndex < 0 || queueIndex + 1 >= queue.length} onClick={() => skipQueue(1)} aria-label="Next track">›</button>
         </div>
         {queueIndex >= 0 && <span className="results-status">{queueIndex + 1} / {queue.length}</span>}
       </div>
@@ -509,13 +641,14 @@ export function App() {
             onChange={event => setVolumeDraft(Number(event.target.value))}
             onPointerCancel={() => setVolumeDraft(null)}
             onBlur={() => setVolumeDraft(null)}
-            onPointerUp={event => { if (!active) return; const value = Number(event.currentTarget.value); setVolumeDraft(null); void control(generation => api.volume(generation, value)); }}
-            onKeyUp={event => { if (["ArrowLeft", "ArrowRight", "Home", "End", "PageUp", "PageDown"].includes(event.key)) { const value = Number(event.currentTarget.value); setVolumeDraft(null); void control(generation => api.volume(generation, value)); } }} />
+            onPointerUp={event => { if (!active) return; void changeVolume(Number(event.currentTarget.value)); }}
+            onKeyUp={event => { if (active && ["ArrowLeft", "ArrowRight", "Home", "End", "PageUp", "PageDown"].includes(event.key)) void changeVolume(Number(event.currentTarget.value)); }} />
           <output>{Math.round(volumeDraft ?? volume)}%</output>
         </div>
       </div>
 
       {playError && playback !== "error" && <p className="player-error" role="alert">{playError}</p>}
+      {settingsError && <p className="player-error" role="alert">{settingsError}</p>}
     </footer>
   </div>;
 }

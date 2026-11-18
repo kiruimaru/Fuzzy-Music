@@ -46,9 +46,10 @@ export const api = {
       generation, request: { query, limit: 30 },
     }),
   cancelSearch: (generation: number) => invoke<void>("cancel_search", { generation }),
-  play: (generation: number, track: Track) =>
+  play: (generation: number, track: Track, options?: { fresh?: boolean; volume?: number }) =>
     invoke<void>("play_track", {
       generation, request: { source: track.source, trackUrl: track.sourceUrl },
+      ...options,
     }),
   stop: (generation: number) => invoke<void>("stop_playback", { generation }),
   prepare: (generation: number, track: Track, playbackGeneration: number) => invoke<void>("prepare_track", {

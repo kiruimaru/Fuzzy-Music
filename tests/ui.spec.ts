@@ -179,3 +179,76 @@ test("player bar stays visible with a long playlist", async ({ page }) => {
   await expect(page.getByRole("button", { name: "Stop" })).toBeVisible();
   await page.screenshot({ path: "test-results/long-playlist-1000.png" });
 });
+
+for (const width of [1000, 320]) {
+  test(`editable session queue, EOF and removal at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 720 });
+    await page.addInitScript(() => {
+      const tracks = Array.from({ length: 3 }, (_, index) => ({
+        id: String(index + 1), title: `Queue track ${index + 1}`, author: "Example artist",
+        artworkUrl: null, durationMs: 180000, streamUrl: null, source: "soundcloud",
+        sourceUrl: `https://soundcloud.com/a/t${index + 1}`,
+      }));
+      let status = {
+        generation: 0, state: "idle", trackId: null as string | null, error: null,
+        positionMs: 0, durationMs: 180000, volume: 100, seekable: true,
+      };
+      window.addEventListener("fixture-eof", () => { status.state = "stopped"; });
+      Object.assign(window, { __TAURI_INTERNALS__: {
+        invoke: async (command: string, args: {
+          generation: number; request: { trackUrl: string }; volume: number; fresh: boolean;
+          action: { type: string; volume: number; paused: boolean; position_ms: number };
+        }) => {
+          if (command === "search_tracks") return { tracks, nextPageToken: null };
+          if (command === "play_track") {
+            if (!args.fresh) throw new Error("Session tracks must resolve fresh");
+            status = {
+              ...status, generation: args.generation, state: "playing", volume: args.volume,
+              trackId: tracks.find(track => track.sourceUrl === args.request.trackUrl)!.id,
+            };
+          }
+          if (command === "stop_playback") status = { ...status, generation: args.generation, state: "stopped" };
+          if (command === "playback_status") return { ...status };
+          if (command === "update_playback") {
+            if (args.action.type === "pause") status.state = args.action.paused ? "paused" : "playing";
+            if (args.action.type === "volume") status.volume = args.action.volume;
+            if (args.action.type === "seek") status.positionMs = args.action.position_ms;
+          }
+        },
+      } });
+    });
+    await page.goto("/");
+    await page.getByLabel("Track or artist").fill("queue");
+    await page.getByRole("button", { name: "Search", exact: true }).click();
+    for (let index = 1; index <= 3; index++) {
+      await page.getByRole("button", { name: `Add Queue track ${index} to queue`, exact: true }).click();
+    }
+    await page.getByRole("tab", { name: "Queue (3)" }).click();
+    const list = page.getByRole("region", { name: "Session queue" });
+    await expect(list.getByRole("listitem")).toHaveCount(3);
+    await list.getByRole("button", { name: "Play queued Queue track 1", exact: true }).click();
+    await expect(page.getByText("Playing", { exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Previous track" })).toBeDisabled();
+    await page.evaluate(() => window.dispatchEvent(new Event("fixture-eof")));
+    await expect(page.getByText("2 / 3", { exact: true })).toBeVisible();
+    await list.getByRole("button", { name: "Remove Queue track 1 from queue", exact: true }).click();
+    await expect(page.getByText("1 / 2", { exact: true })).toBeVisible();
+    await expect(list.locator('[aria-current="true"]')).toContainText("Queue track 2");
+    await expect(page.getByText("Playing", { exact: true })).toBeVisible();
+    await page.screenshot({ path: `test-results/queue-${width}.png` });
+    await list.getByRole("button", { name: "Remove Queue track 2 from queue", exact: true }).click();
+    await expect(page.getByText("Stopped", { exact: true })).toBeVisible();
+    await expect(page.getByText("No track selected", { exact: true })).toBeVisible();
+    await expect(list.getByRole("listitem")).toHaveCount(1);
+    await expect.poll(() => page.evaluate(() =>
+      document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    const playerBox = await page.getByRole("contentinfo", { name: "Playback" }).boundingBox();
+    expect(playerBox!.y + playerBox!.height).toBeLessThanOrEqual(721);
+    await list.getByRole("button", { name: "Play queued Queue track 3", exact: true }).click();
+    await expect(page.getByText("Playing", { exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Next track" })).toBeDisabled();
+    await page.evaluate(() => window.dispatchEvent(new Event("fixture-eof")));
+    await expect(page.getByText("Stopped", { exact: true })).toBeVisible();
+    await expect(page.getByText("1 / 1", { exact: true })).toBeVisible();
+  });
+}

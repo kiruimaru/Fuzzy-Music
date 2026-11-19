@@ -40,6 +40,8 @@ pub struct Playlist {
     pub artwork_url: Option<String>,
     pub track_count: Option<u32>,
     pub duration_ms: Option<u64>,
+    #[serde(default)]
+    pub is_album: bool,
     pub source: Source,
     pub source_url: String,
 }
@@ -220,6 +222,7 @@ impl From<fuzzy_soundcloud::Playlist> for Playlist {
             artwork_url: playlist.artwork_url,
             track_count: playlist.track_count,
             duration_ms,
+            is_album: playlist.is_album,
             source: Source::Soundcloud,
             source_url: playlist.webpage_url,
         }

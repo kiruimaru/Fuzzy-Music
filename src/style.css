@@ -214,6 +214,32 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 .playlist-by, .playlist-note { margin: 0; color: var(--muted); font-size: 13px; }
 .playlist-note { margin-top: 6px; color: #c8b184; }
 
+/* ---------- Album view ---------- */
+.album-banner {
+  position: relative; overflow: hidden; isolation: isolate;
+  display: flex; align-items: flex-end; gap: 26px;
+  width: 100%; min-height: 248px; padding: 30px;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 20px;
+}
+.album-backdrop {
+  position: absolute; inset: 0; z-index: -2; width: 100%; height: 100%;
+  object-fit: cover; filter: blur(42px) saturate(1.6); transform: scale(1.25); opacity: .4;
+}
+.album-banner::after {
+  content: ""; position: absolute; inset: 0; z-index: -1;
+  background: linear-gradient(180deg, rgb(10 14 22 / 15%), var(--panel) 92%);
+}
+.album-cover {
+  width: 236px; height: 236px; flex: none; border-radius: 14px;
+  object-fit: cover; background: #232a39; font-size: 56px;
+  box-shadow: 0 24px 54px rgb(0 0 0 / 48%);
+}
+.album-info { min-width: 0; display: flex; flex-direction: column; gap: 8px; }
+.album-info h2 { margin: 0; font-size: 36px; line-height: 1.08; overflow-wrap: anywhere; }
+.album-stats { margin: 0; color: var(--muted); font-size: 13px; }
+.album-actions { margin-top: 8px; }
+.album-actions .primary { padding: 12px 24px; font-size: 15px; }
+
 .results { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 6px 6px 10px; }
 .results-head {
   display: grid; grid-template-columns: 32px 44px minmax(0, 1fr) 28px 56px 36px 36px 36px;
@@ -508,6 +534,10 @@ input[type="range"]:disabled::-webkit-slider-thumb { cursor: default; }
   .playlist-hero { align-items: center; gap: 14px; }
   .playlist-hero-cover { width: 88px; height: 88px; }
   .playlist-hero h2 { font-size: 19px; }
+  .album-banner { flex-direction: column; align-items: flex-start; gap: 16px; min-height: 0; padding: 18px; }
+  .album-cover { width: 148px; height: 148px; font-size: 38px; }
+  .album-info h2 { font-size: 25px; }
+  .album-actions .primary { padding: 10px 18px; font-size: 14px; }
   .artist-banner { align-items: center; gap: 16px; padding: 18px; min-height: 0; }
   .artist-avatar { width: 96px; height: 96px; font-size: 30px; }
   .artist-info h2 { font-size: 24px; }

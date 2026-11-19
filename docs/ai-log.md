@@ -949,4 +949,11 @@ the minimal Tauri shell.
 - Verification: frontend 37 tests passed; TypeScript/Vite build and Tauri debug build passed; CSS 18.29 kB (4.32 kB gzip), JS 269.12 kB.
 - Title marquee verification: frontend 37 tests passed; TypeScript/Vite production build passed; CSS 18.71 kB (4.43 kB gzip), JS 270.06 kB.
 
+## 2026-11-19 — Album view
+
+- Playlist contract now carries `isAlbum` from the SoundCloud web client through the application DTO; `serde(default)` keeps playlists stored in SQLite by earlier versions readable.
+- Albums render a dedicated banner: blurred artwork backdrop, large cover, Album eyebrow, larger title, linked artist, track count with total duration, and Play album/favourite/download actions inside the hero. Regular playlists keep the compact header.
+- The banner stacks vertically and the cover shrinks below 560 px. No new dependencies, playback or storage changes.
+- Verification: frontend 37 tests passed; Rust workspace 60 passed, 4 ignored; TypeScript/Vite build and Tauri debug build passed.
+
 

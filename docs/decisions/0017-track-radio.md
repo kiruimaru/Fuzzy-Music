@@ -9,13 +9,16 @@ the playlist path, so gapless preparation, lookahead and playback recovery
 behave exactly like playlist playback; the only difference is where the queue
 entries come from.
 
-The queue keeps growing while radio mode is active. When fewer than five tracks
-remain after the current one, the client requests another page of related tracks
-for the last queued entry and appends only entries not already present, keyed by
-source and track id. A successful append clears the retry timer, so a short page
-is topped up on the next status poll. An empty or failed request waits twenty
-seconds before retrying, which keeps an unavailable recommendation service from
-turning the two-hundred-fifty-millisecond status poll into a request storm.
+The queue keeps growing while radio mode is active. Playback keeps at least ten
+tracks queued ahead: when that buffer runs low, the client requests another page
+of related tracks for the last queued entry, falling back to the currently
+playing track when the tail page yields nothing new, and appends only entries
+not already present, keyed by source and track id. Starting radio chains up to
+three pages so a short first page still produces a usable buffer. A successful
+append clears the retry timer, so a low buffer is topped up on the next status
+poll. An empty or failed request waits twenty seconds before retrying, which
+keeps an unavailable recommendation service from turning the
+two-hundred-fifty-millisecond status poll into a request storm.
 
 Radio ends when the user starts another list, plays an entry from the session
 queue, or presses Stop; pending requests are cancelled through their own

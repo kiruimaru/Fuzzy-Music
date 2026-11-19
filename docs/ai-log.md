@@ -980,8 +980,8 @@ the minimal Tauri shell.
 ## 2026-11-19 — Track radio
 
 - SoundCloud track rows in search, artist pages, playlists, Favourites and the library gained a radio action; local rows do not show it. The seed plays immediately and the queue is extended with related tracks from the web API, deduplicated by source and id.
-- While radio is active, the client requests another page of related tracks for the last queued entry whenever fewer than five tracks remain, resetting the retry timer after a successful append and waiting twenty seconds after an empty or failed page.
+- While radio is active, playback keeps at least ten tracks queued ahead. When the buffer runs low, the client chains another page of related tracks for the last queued entry, falling back to the currently playing track when the tail page yields nothing new; the first page is also chained up to three rounds so a short page still builds a buffer. Appends reset the retry timer, and an empty or failed page waits twenty seconds.
 - Radio ends on another list, a session-queue selection or Stop; requests carry their own generation and are cancelled when radio ends. The endpoint, id validation and local-source rejection are covered by tests.
-- Verification: frontend 40 tests passed; Rust workspace 63 passed, 4 ignored; rustfmt and strict clippy clean; Tauri debug build passed (CSS 21.52 kB, JS 275.82 kB).
+- Verification: frontend 41 tests passed; Rust workspace 63 passed, 4 ignored; rustfmt and strict clippy clean; Tauri debug build passed.
 
 

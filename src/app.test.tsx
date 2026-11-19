@@ -914,3 +914,31 @@ test("radio keeps extending the queue as it approaches the end", async () => {
   expect(calls[0][1].id).toBe("1");
   expect(calls[1][1].id).toBe("2");
 });
+
+test("radio refills the queue before the buffer runs empty", async () => {
+  const buffer = Array.from({ length: 11 }, (_, index) => ({
+    ...track,
+    id: String(index + 2),
+    title: `Related ${index + 2}`,
+    sourceUrl: `https://soundcloud.com/other/related-${index + 2}`,
+  }));
+  const deeper = { ...track, id: "13", title: "Deeper", sourceUrl: "https://soundcloud.com/other/deeper" };
+  vi.mocked(api.search).mockResolvedValue({ tracks: [track], nextPageToken: null });
+  vi.mocked(api.relatedTracks)
+    .mockResolvedValueOnce({ tracks: buffer })
+    .mockResolvedValue({ tracks: [deeper] });
+  vi.mocked(api.play).mockResolvedValue(undefined);
+  vi.mocked(api.status).mockImplementation(async () => ({
+    generation: vi.mocked(api.play).mock.calls.at(-1)?.[0] ?? 0,
+    trackId: vi.mocked(api.play).mock.calls.at(-1)?.[1].id ?? null,
+    state: "playing", error: null, positionMs: 1000, durationMs: 180000, volume: 100, seekable: true,
+  }));
+  render(<App settings={createMemorySettingsStore()} />);
+  search("music");
+  fireEvent.click(await screen.findByRole("button", { name: "Start radio from Example" }));
+  await screen.findByText("1 / 12");
+  fireEvent.click(screen.getByRole("button", { name: "Next track" }));
+  fireEvent.click(screen.getByRole("button", { name: "Next track" }));
+  await screen.findByText("3 / 13");
+  expect(vi.mocked(api.relatedTracks).mock.calls[1][1].id).toBe("12");
+});

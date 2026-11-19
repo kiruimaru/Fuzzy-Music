@@ -9,6 +9,8 @@ import vkIcon from "./assets/vk.png";
 
 // Keep new webview sessions newer than requests retained by the Rust process.
 const generationBase = Date.now() * 1000;
+// Radio keeps at least this many tracks queued ahead of playback.
+const RADIO_MIN_AHEAD = 10;
 
 function time(milliseconds: number) {
   const seconds = Math.max(0, Math.floor(milliseconds / 1000));
@@ -333,31 +335,22 @@ export function App({ settings = settingsStore }: { settings?: SettingsStore }) 
                 }
               });
             }
-            // Radio keeps itself going: top the queue up with tracks related to
-            // its last entry while only a few songs remain.
+            // Radio keeps itself going: keep a healthy buffer of related
+            // tracks ahead of playback, chaining pages as the queue shrinks.
             const remainingTracks = queueRef.current.length - indexRef.current - 1;
             if (radioMode.current && status.state === "playing" && !radioPending.current &&
-                remainingTracks <= 4 && Date.now() - radioAttempt.current >= 20000) {
-              const seed = queueRef.current[queueRef.current.length - 1];
-              if (seed) {
-                radioAttempt.current = Date.now();
-                radioPending.current = true;
-                const current = ++radioGeneration.current;
-                void api.relatedTracks(current, seed).then(response => {
-                  if (current !== radioGeneration.current || !radioMode.current) return;
-                  const known = new Set(queueRef.current.map(track => `${track.source}:${track.id}`));
-                  const extra = response.tracks.filter(track => !known.has(`${track.source}:${track.id}`));
-                  if (extra.length) {
-                    queueRef.current = [...queueRef.current, ...extra];
-                    setQueue(queueRef.current);
-                    radioAttempt.current = 0;
-                  }
-                }).catch(() => {
-                  // Keep the current queue; a later cycle retries the radio.
-                }).finally(() => {
-                  if (current === radioGeneration.current) radioPending.current = false;
-                });
-              }
+                remainingTracks <= RADIO_MIN_AHEAD && Date.now() - radioAttempt.current >= 20000) {
+              radioAttempt.current = Date.now();
+              radioPending.current = true;
+              const current = ++radioGeneration.current;
+              void extendRadio(current).then(added => {
+                if (current !== radioGeneration.current) return;
+                if (added) radioAttempt.current = 0;
+              }).catch(() => {
+                // Keep the current queue; a later cycle retries the radio.
+              }).finally(() => {
+                if (current === radioGeneration.current) radioPending.current = false;
+              });
             }
           }
           if (status.state === "stopped" && autoAdvance.current) {
@@ -610,6 +603,28 @@ export function App({ settings = settingsStore }: { settings?: SettingsStore }) 
     void play(list[startIndex], true);
   }
 
+  /// Append one page of related tracks for the furthest queue entry, falling
+  /// back to the currently playing track when the tail yields nothing new.
+  /// Returns the number of tracks appended.
+  async function extendRadio(generation: number): Promise<number> {
+    const tried = new Set<string>();
+    const candidates = [queueRef.current[queueRef.current.length - 1], queueRef.current[indexRef.current]];
+    for (const seed of candidates) {
+      if (!seed || seed.source !== "soundcloud" || tried.has(seed.id)) continue;
+      tried.add(seed.id);
+      const response = await api.relatedTracks(generation, seed);
+      if (generation !== radioGeneration.current || !radioMode.current) return 0;
+      const known = new Set(queueRef.current.map(item => `${item.source}:${item.id}`));
+      const extra = response.tracks.filter(item => !known.has(`${item.source}:${item.id}`));
+      if (extra.length) {
+        queueRef.current = [...queueRef.current, ...extra];
+        setQueue(queueRef.current);
+        return extra.length;
+      }
+    }
+    return 0;
+  }
+
   /// Start the seed track immediately, then extend the queue with its related
   /// tracks and keep extending it as playback approaches the queue end.
   async function startRadio(track: Track) {
@@ -622,15 +637,13 @@ export function App({ settings = settingsStore }: { settings?: SettingsStore }) 
     const generation = ++radioGeneration.current;
     radioPending.current = true;
     try {
-      const response = await api.relatedTracks(generation, track);
-      if (generation !== radioGeneration.current || !radioMode.current) return;
-      const known = new Set(queueRef.current.map(item => `${item.source}:${item.id}`));
-      const extra = response.tracks.filter(item => !known.has(`${item.source}:${item.id}`));
-      if (extra.length) {
-        queueRef.current = [...queueRef.current, ...extra];
-        setQueue(queueRef.current);
-        radioAttempt.current = 0;
+      // Build a useful buffer right away instead of stopping after one page.
+      for (let round = 0; round < 3; round++) {
+        if (queueRef.current.length - 1 >= RADIO_MIN_AHEAD) break;
+        const added = await extendRadio(generation);
+        if (!added) break;
       }
+      if (generation === radioGeneration.current) radioAttempt.current = 0;
     } catch {
       if (generation === radioGeneration.current) {
         setPlayError("Radio could not load similar tracks. Try again.");

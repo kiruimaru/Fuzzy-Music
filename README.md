@@ -14,8 +14,8 @@ remaining limitations. Playlist playback supports previous/next and automatic
 transitions. A separate session queue supports adding search results, selecting
 and removing entries, Previous/Next and automatic advancement without repeat.
 Removing the current entry stops playback and leaves the next choice to the user.
-Queue persistence is outside the MVP. Favourites, volume, download quality and
-the music-folder setting are stored locally.
+Queue persistence is outside the MVP. Favourite tracks and playlists, volume,
+download quality and the music-folder setting are stored locally.
 
 Liking a SoundCloud track queues one disk download, using the best available
 source audio by default. Settings offer lower bitrate preferences and a folder
@@ -30,8 +30,10 @@ A dark Spotify-style shell also adds public SoundCloud **playlist search**:
 search playlists, open one and play its tracks through the same player. It uses
 the SoundCloud web API with an auto-discovered `client_id`, because `yt-dlp`
 cannot search playlists. See decision 0006 and
-[`tasks/playlist-search.md`](tasks/playlist-search.md). Saved playlists are not
-implemented. Integration checks and accepted review follow-ups are recorded in
+[`tasks/playlist-search.md`](tasks/playlist-search.md). Playlists can be
+bookmarked like tracks; a bookmark appears in Favourites and plays online until
+the user explicitly downloads the whole playlist for offline use. See decision
+0011. Integration checks and accepted review follow-ups are recorded in
 [`tasks/pr20-pr23-integration.md`](tasks/pr20-pr23-integration.md).
 Session queue behavior and #22 acceptance are recorded in
 [`tasks/playback-queue-22.md`](tasks/playback-queue-22.md).
@@ -42,9 +44,9 @@ Session queue behavior and #22 acceptance are recorded in
 - Show title, author, cover art, and duration.
 - Play, pause, seek, and control volume.
 - Manage a playback queue and switch tracks.
-- Store local favourites and application settings.
+- Store favourite tracks and playlists, and application settings.
 
-Saved/custom playlists and history are post-MVP work. Dark and light themes
+User-created playlists and history are post-MVP work. Dark and light themes
 are available in settings.
 
 ## Architecture and stack

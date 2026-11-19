@@ -31,7 +31,7 @@ pub struct SearchTracksRequest {
     pub limit: Option<usize>,
 }
 
-#[derive(Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct Playlist {
     pub id: String,

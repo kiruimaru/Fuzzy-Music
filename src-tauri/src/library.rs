@@ -547,6 +547,24 @@ impl Library {
         Ok(ids)
     }
 
+    /// Delete a library entry and its playlist memberships. Returns the
+    /// downloaded file, if any, so the caller can remove it from disk.
+    pub fn remove(&self, id: i64) -> Result<Option<PathBuf>, AppError> {
+        let connection = self.connection.lock().map_err(|_| storage_error())?;
+        let path: Option<String> = connection
+            .query_row("SELECT path FROM media WHERE id=?1", [id], |row| row.get(0))
+            .optional()
+            .map_err(|_| storage_error())?
+            .flatten();
+        connection
+            .execute("DELETE FROM playlist_tracks WHERE media_id=?1", [id])
+            .map_err(|_| storage_error())?;
+        connection
+            .execute("DELETE FROM media WHERE id=?1", [id])
+            .map_err(|_| storage_error())?;
+        Ok(path.map(PathBuf::from))
+    }
+
     fn state(&self, id: i64, state: &str, error: Option<&str>) -> Result<(), AppError> {
         self.connection
             .lock()
@@ -825,6 +843,30 @@ impl LibraryService {
         Ok(())
     }
 
+    /// Delete a track from the library together with its downloaded file,
+    /// cancelling any in-flight download first. Playlist memberships are
+    /// dropped so playlists do not keep phantom entries.
+    pub fn remove(&self, id: i64) -> Result<(), AppError> {
+        let token = self
+            .tokens
+            .lock()
+            .map_err(|_| storage_error())?
+            .get(&id)
+            .cloned();
+        if let Some(token) = token {
+            token.cancel();
+        }
+        // A cancelled worker must not requeue the entry it still owns.
+        self.cancelled
+            .lock()
+            .map_err(|_| storage_error())?
+            .insert(id);
+        if let Some(path) = self.library.remove(id)? {
+            let _ = fs::remove_file(path);
+        }
+        Ok(())
+    }
+
     pub fn enqueue(&self, id: i64) -> Result<(), AppError> {
         self.cancelled
             .lock()
@@ -954,12 +996,17 @@ impl LibraryService {
         file.persist_noclobber(&destination)
             .map_err(|_| storage_error())?;
         let destination = destination.canonicalize().map_err(|_| storage_error())?;
-        connection
+        let updated = connection
             .execute(
                 "UPDATE media SET path=?1,download_state='ready',error=NULL WHERE id=?2",
                 params![destination.to_string_lossy(), id],
             )
             .map_err(|_| storage_error())?;
+        drop(connection);
+        if updated == 0 {
+            // The entry was deleted while this download was finishing.
+            let _ = fs::remove_file(&destination);
+        }
         Ok(())
     }
 
@@ -1141,6 +1188,47 @@ mod tests {
         assert_eq!(reopened.path(id).unwrap(), path);
         fs::remove_file(path).unwrap();
         assert_eq!(reopened.entry(id).unwrap().download_state, "missing");
+    }
+
+    #[test]
+    fn deleting_a_track_removes_audio_and_playlist_membership() {
+        let dir = tempfile::tempdir().unwrap();
+        let music = dir.path().join("music");
+        fs::create_dir(&music).unwrap();
+        let executable = fixture_executable(dir.path());
+        let service = LibraryService::start(
+            Library::open(dir.path(), &music).unwrap(),
+            executable,
+            NetworkPolicy::default(),
+        );
+        service
+            .download_playlist(playlist(), vec![track("one"), track("two")])
+            .unwrap();
+        let entries = service.library.entries().unwrap();
+        assert_eq!(entries.len(), 2);
+        let one = entries
+            .iter()
+            .find(|entry| entry.track.id == "one")
+            .unwrap()
+            .id;
+        let two = entries
+            .iter()
+            .find(|entry| entry.track.id == "two")
+            .unwrap()
+            .id;
+        wait_for(&service, one, "ready");
+        wait_for(&service, two, "ready");
+        let path = service.library.path(one).unwrap();
+        assert!(path.exists());
+        assert_eq!(service.library.playlists().unwrap()[0].total, 2);
+        service.remove(one).unwrap();
+        assert!(!path.exists());
+        assert!(service.library.entry(one).is_err());
+        assert!(service.library.path(two).unwrap().exists());
+        let remaining = &service.library.playlists().unwrap()[0];
+        assert_eq!((remaining.downloaded, remaining.total), (1, 1));
+        assert_eq!(remaining.state, "ready");
+        service.shutdown();
     }
 
     #[test]

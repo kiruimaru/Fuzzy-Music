@@ -771,4 +771,41 @@ the minimal Tauri shell.
 - Playlist downloads continue to never mark tracks as favourites, and a test asserts cancelled playlist tracks stay out of Favourites.
 - Verification: added a fixture-backed cancellation test (in-flight abort, queued ids skipped, no requeue, bookmark kept, no favourites).
 
+## 2026-11-19 — Artist pages and list playback
+
+- Added artist pages: a SoundCloud artist URL resolves to a user id and loads the first 50 public tracks through the web API; non-artist URLs are rejected before network access.
+- Artist names in track rows are links; the artist view reuses playlist header styling, keeps search results for Back to search and offers Play artist.
+- Playing any row now starts the visible list as the queue, so search results, artist pages, playlists, Favourites and the music library auto-advance through the existing transition machinery; the session queue keeps its semantics.
+- New commands `artist_tracks` and `cancel_artists`; new `Artist` DTO; response parsing accepts both bare-array and collection track shapes.
+- Verification: workspace tests 58 passed and 4 ignored; frontend 34 tests; clippy clean; Tauri debug build passed.
+
+## 2026-11-19 — Unliking, artist presentation and universal artist links
+
+- Favourite rows now disappear the moment the heart is unclicked: the list updates optimistically and the background refresh reconciles with SQLite, restoring the entry if the write fails. The same applies to bookmarked playlists in Favourites.
+- Heart buttons on track rows now announce Remove from favourites when the track is liked instead of a stale Favourite label, and library rows gained the grid they need when the Retry action makes five buttons.
+- The artist page no longer borrows playlist chrome: it has its own banner with a blurred avatar backdrop, a circular portrait, name, track counts and Play artist, followed by a titled track list.
+- Artist names link to the artist page in all remaining surfaces: Favourites and music-library rows, favourite playlist rows, playlist cards, the playlist header, the session queue and the now-playing panel. Playlist authors are derived from the playlist URL's first path segment; names without a SoundCloud page stay plain text.
+- Playlist cards were restructured so the author link is a real button rather than a nested one inside the open-card button.
+- Verification: frontend 35 tests including immediate-unlike and playlist-author-navigation cases; TypeScript/Vite build passed; Tauri debug build passed.
+
+## 2026-11-19 — Deleting saved tracks
+
+- Favourites and Music library rows gained an explicit delete action next to the heart. Deleting cancels an in-flight download, removes the media row and its downloaded file, and drops `playlist_tracks` memberships so playlists do not keep phantom entries.
+- Unliking stays non-destructive: the heart keeps a downloaded file in the library while delete removes it entirely. Favourite playlist rows use the same explicit delete action to drop the bookmark and keep their downloaded audio.
+- A download that finishes after its media row was deleted now removes its own persisted file instead of leaving an orphan.
+- Verification: fixture-backed Rust test covers file and playlist-membership removal; workspace tests 59 passed and 4 ignored; frontend 36 tests; clippy clean; Tauri debug build passed.
+
+## 2026-11-19 — Artist catalog sections
+
+- Artist pages now load the artist's public sets from api-v2 alongside their tracks. Sets flagged `is_album` are listed under Albums; the rest under Playlists, so the catalog is separated into Tracks, Albums and Playlists tabs with counts.
+- The artist hero summarizes all three counts and keeps Play artist bound to the track list. Album and playlist cards reuse the playlist card layout, open through the existing playlist view and keep favourite toggles. Leaving a playlist opened from an artist returns to the artist page.
+- Artist playlist parsing accepts bare arrays and collection responses and drops entries without a valid SoundCloud set URL. Only the first 50 tracks and 50 sets are loaded per artist in this iteration.
+- Verification: workspace tests 60 passed and 4 ignored; frontend 37 tests; clippy and rustfmt clean; Tauri debug build passed.
+
+## 2026-11-19 — Playlist tracks from artist pages and card alignment
+
+- Playlist and album tracks opened from an artist page were hidden because the results section was gated on the artist being closed. The gate now yields while a playlist is open, so the hero, Play and track rows stay together; Back to artist still returns to the catalog.
+- Playlist cards could widen beyond their grid column: the inner card button had no width bound, so a long nowrap title inflated it and the 100%-wide square cover with it, pushing author and meta down by different amounts. The button is now width-bound with `min-width: 0`, and cards and wrappers shrink to their column, keeping every cover square, inside the padding and aligned across the row.
+- Verification: frontend 37 tests including an album-opened-from-artist track assertion; TypeScript/Vite build passed; Tauri debug build passed.
+
 

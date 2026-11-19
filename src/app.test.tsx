@@ -16,6 +16,8 @@ vi.mock("./api", async (original) => ({
     prefetch: vi.fn().mockResolvedValue(undefined),
     cancelPreparation: vi.fn().mockResolvedValue(undefined),
     playlistTracks: vi.fn(),
+    artistTracks: vi.fn(),
+    cancelArtists: vi.fn().mockResolvedValue(undefined),
     cancelPlaylists: vi.fn().mockResolvedValue(undefined),
     pause: vi.fn().mockResolvedValue(undefined), seek: vi.fn().mockResolvedValue(undefined),
     volume: vi.fn().mockResolvedValue(undefined),
@@ -23,6 +25,7 @@ vi.mock("./api", async (original) => ({
     playlistEntries: vi.fn().mockResolvedValue([]),
     scanLibrary: vi.fn().mockResolvedValue({ imported: 0, skipped: 0, truncated: false }),
     favourite: vi.fn().mockResolvedValue(undefined), retryDownload: vi.fn().mockResolvedValue(undefined),
+    removeTrack: vi.fn().mockResolvedValue(undefined),
     favouritePlaylist: vi.fn().mockResolvedValue(undefined), downloadPlaylist: vi.fn().mockResolvedValue(undefined),
     cancelPlaylistDownload: vi.fn().mockResolvedValue(undefined),
     playLibrary: vi.fn().mockResolvedValue(undefined), chooseFolder: vi.fn(),
@@ -56,7 +59,7 @@ afterEach(() => { cleanup(); vi.clearAllMocks(); });
 beforeEach(() => {
   vi.resetAllMocks();
   for (const method of [api.cancelSearch, api.stop, api.prepare, api.prefetch,
-    api.cancelPreparation, api.cancelPlaylists, api.pause, api.seek, api.volume]) {
+    api.cancelPreparation, api.cancelPlaylists, api.cancelArtists, api.pause, api.seek, api.volume]) {
     vi.mocked(method).mockResolvedValue(undefined);
   }
   vi.mocked(api.status).mockResolvedValue({
@@ -630,18 +633,20 @@ test("initial settings read gates Play and a failed read falls back without over
   await screen.findByText("Could not load volume settings.");
   expect((button as HTMLButtonElement).disabled).toBe(false);
   fireEvent.click(button);
-  await waitFor(() => expect(api.play).toHaveBeenCalledWith(expect.any(Number), track, { fresh: true, volume: 100 }));
+  await waitFor(() => expect(api.play).toHaveBeenCalledWith(expect.any(Number), track, { fresh: false, volume: 100 }));
   expect(settings.updateSettings).not.toHaveBeenCalled();
   expect(screen.queryByText("SECRET")).toBeNull();
 });
 
 test("favourite download appears in the library and is played offline", async () => {
   const entry = { id: 8, track, favourite: true, downloadState: "ready" as const, error: null, availableOffline: true };
+  let favourite = false;
   vi.mocked(api.search).mockResolvedValue({ tracks: [track], nextPageToken: null });
-  vi.mocked(api.library).mockResolvedValueOnce([]).mockResolvedValue([entry]);
+  vi.mocked(api.library).mockImplementation(async () => favourite ? [entry] : []);
   vi.mocked(api.playLibrary).mockResolvedValue(undefined);
   render(<App settings={createMemorySettingsStore()} />);
   search("music");
+  favourite = true;
   fireEvent.click(await screen.findByRole("button", { name: "Favourite Example" }));
   await waitFor(() => expect(api.favourite).toHaveBeenCalledWith(track, true));
   fireEvent.click(screen.getByRole("button", { name: "Favourites" }));
@@ -650,8 +655,26 @@ test("favourite download appears in the library and is played offline", async ()
   fireEvent.click(within(favourites).getByRole("button", { name: "Play Example" }));
   await waitFor(() => expect(api.playLibrary).toHaveBeenCalledWith(expect.any(Number), 8, 100));
   expect(api.play).not.toHaveBeenCalled();
+  favourite = false;
   fireEvent.click(within(favourites).getByRole("button", { name: "Remove Example from favourites" }));
   await waitFor(() => expect(api.favourite).toHaveBeenCalledWith(track, false));
+  // Unliking drops the row immediately, without waiting for the next refresh.
+  await waitFor(() => expect(within(favourites).queryByRole("button", { name: "Play Example" })).toBeNull());
+  expect(within(favourites).getByText("No favourites yet.")).toBeTruthy();
+});
+
+test("favourite can be deleted from the library with its downloaded file", async () => {
+  const entry = { id: 8, track, favourite: true, downloadState: "ready" as const, error: null, availableOffline: true };
+  let present = true;
+  vi.mocked(api.library).mockImplementation(async () => present ? [entry] : []);
+  vi.mocked(api.removeTrack).mockImplementation(async () => { present = false; });
+  render(<App settings={createMemorySettingsStore()} />);
+  fireEvent.click(screen.getByRole("button", { name: "Favourites" }));
+  const favourites = await screen.findByRole("region", { name: "Favourite tracks" });
+  fireEvent.click(within(favourites).getByRole("button", { name: "Delete Example from library" }));
+  await waitFor(() => expect(api.removeTrack).toHaveBeenCalledWith(8));
+  await waitFor(() => expect(within(favourites).queryByRole("button", { name: "Play Example" })).toBeNull());
+  expect(within(favourites).getByText("No favourites yet.")).toBeTruthy();
 });
 
 test("playlists are bookmarked and downloaded on request", async () => {
@@ -661,12 +684,14 @@ test("playlists are bookmarked and downloaded on request", async () => {
     sourceUrl: "https://soundcloud.com/curator/sets/evening-mix",
   };
   const saved = { id: 3, playlist, favourite: true, downloaded: 0, total: 0, state: "idle" as const };
+  let bookmarked = false;
   vi.mocked(api.searchPlaylists).mockResolvedValue({ playlists: [playlist], nextPageToken: null });
-  vi.mocked(api.playlistEntries).mockResolvedValueOnce([]).mockResolvedValue([saved]);
+  vi.mocked(api.playlistEntries).mockImplementation(async () => bookmarked ? [saved] : []);
   render(<App settings={createMemorySettingsStore()} />);
   fireEvent.click(screen.getByRole("tab", { name: "Playlists" }));
   fireEvent.change(screen.getByLabelText("Playlist name"), { target: { value: "mix" } });
   fireEvent.click(screen.getByRole("button", { name: "Search" }));
+  bookmarked = true;
   fireEvent.click(await screen.findByRole("button", { name: "Favourite playlist Evening Mix" }));
   await waitFor(() => expect(api.favouritePlaylist).toHaveBeenCalledWith(playlist, true));
   fireEvent.click(screen.getByRole("button", { name: "Favourites" }));
@@ -674,8 +699,11 @@ test("playlists are bookmarked and downloaded on request", async () => {
   expect(within(favourites).getByText("Evening Mix")).toBeTruthy();
   fireEvent.click(within(favourites).getByRole("button", { name: "Download playlist Evening Mix" }));
   await waitFor(() => expect(api.downloadPlaylist).toHaveBeenCalledWith(playlist));
+  bookmarked = false;
   fireEvent.click(within(favourites).getByRole("button", { name: "Remove playlist Evening Mix from favourites" }));
   await waitFor(() => expect(api.favouritePlaylist).toHaveBeenCalledWith(playlist, false));
+  // The bookmarked playlist disappears from Favourites immediately.
+  await waitFor(() => expect(screen.queryByRole("region", { name: "Favourite playlists" })).toBeNull());
 });
 
 test("playlist download can be cancelled and its tracks stay out of favourites", async () => {
@@ -726,4 +754,94 @@ test("theme and FLAC preference are saved and applied", async () => {
   fireEvent.change(screen.getByLabelText("Download quality"), { target: { value: "flac" } });
   await screen.findByText(/Requires ffmpeg/);
   await waitFor(async () => expect(await settings.getSettings()).toMatchObject({ theme: "light", downloadQuality: "flac" }));
+});
+
+test("artist pages open from a track and play their list in order", async () => {
+  const second: Track = { ...track, id: "2", title: "Second", sourceUrl: "https://soundcloud.com/artist/second" };
+  vi.mocked(api.search).mockResolvedValue({ tracks: [track, second], nextPageToken: null });
+  const artist = { id: "5", name: "Artist", avatarUrl: null, trackCount: 2, sourceUrl: "https://soundcloud.com/artist" };
+  vi.mocked(api.artistTracks).mockResolvedValue({ artist, tracks: [track, second], albums: [], playlists: [] });
+  render(<App settings={createMemorySettingsStore()} />);
+  search("music");
+  fireEvent.click((await screen.findAllByRole("button", { name: "Open artist Artist" }))[0]);
+  await waitFor(() => expect(api.artistTracks).toHaveBeenCalledWith(expect.any(Number), "https://soundcloud.com/artist"));
+  const list = await screen.findByRole("region", { name: "Artist tracks" });
+  expect(within(list).getByText("Second")).toBeTruthy();
+  fireEvent.click(within(list).getByRole("button", { name: "Play Example" }));
+  await waitFor(() => expect(api.play).toHaveBeenCalledWith(expect.any(Number), track, { fresh: false, volume: 100 }));
+  expect(screen.getByText("1 / 2")).toBeTruthy();
+  // Reaching the end of the track advances through the artist list automatically.
+  const generation = vi.mocked(api.play).mock.calls.at(-1)![0];
+  vi.mocked(api.status).mockResolvedValue({
+    generation, state: "stopped", trackId: "1", positionMs: 0, durationMs: null,
+    volume: 100, seekable: false, error: null,
+  });
+  await waitFor(() => expect(api.play).toHaveBeenCalledTimes(2), { timeout: 3000 });
+  expect(vi.mocked(api.play).mock.calls[1][1]).toEqual(second);
+  expect(screen.getByText("2 / 2")).toBeTruthy();
+  // Back returns to the search results without losing them.
+  fireEvent.click(screen.getByRole("button", { name: "← Back to search" }));
+  expect(screen.queryByRole("region", { name: "Artist tracks" })).toBeNull();
+  expect(screen.getByRole("region", { name: "Search results" })).toBeTruthy();
+});
+
+test("artist page separates tracks, albums and playlists", async () => {
+  const album: Playlist = {
+    id: "91", title: "Night LP", author: "Artist", artworkUrl: null, trackCount: 8,
+    durationMs: null, source: "soundcloud", sourceUrl: "https://soundcloud.com/artist/sets/night-lp",
+  };
+  const mix: Playlist = {
+    ...album, id: "92", title: "Radio Mix", trackCount: 12,
+    sourceUrl: "https://soundcloud.com/artist/sets/radio-mix",
+  };
+  const artist = { id: "5", name: "Artist", avatarUrl: null, trackCount: 3, sourceUrl: "https://soundcloud.com/artist" };
+  vi.mocked(api.search).mockResolvedValue({ tracks: [track], nextPageToken: null });
+  vi.mocked(api.artistTracks).mockResolvedValue({ artist, tracks: [track], albums: [album], playlists: [mix] });
+  vi.mocked(api.playlistTracks).mockResolvedValue({ playlist: album, tracks: [track], skippedTrackCount: 0 });
+  render(<App settings={createMemorySettingsStore()} />);
+  search("music");
+  fireEvent.click(await screen.findByRole("button", { name: "Open artist Artist" }));
+  const hero = await screen.findByRole("region", { name: "Artist" });
+  expect(within(hero).getByText(/1 album/)).toBeTruthy();
+  expect(within(hero).getByText(/1 playlist/)).toBeTruthy();
+
+  fireEvent.click(within(hero).getByRole("tab", { name: "Albums" }));
+  const albums = await screen.findByRole("region", { name: "Artist albums" });
+  expect(within(albums).getByText("Night LP")).toBeTruthy();
+  expect(within(albums).queryByText("Radio Mix")).toBeNull();
+  fireEvent.click(within(albums).getByRole("button", { name: "Open playlist Night LP" }));
+  await waitFor(() => expect(api.playlistTracks).toHaveBeenCalledWith(expect.any(Number), album));
+  await screen.findByRole("heading", { name: "Night LP" });
+  // Tracks opened from an artist page must stay visible while the artist is
+  // still the return target; only the artist sections are hidden.
+  const albumTracks = await screen.findByRole("region", { name: "Search results" });
+  expect(within(albumTracks).getByText("Example")).toBeTruthy();
+  expect(screen.queryByRole("region", { name: "Artist tracks" })).toBeNull();
+
+  fireEvent.click(screen.getByRole("button", { name: "← Back to artist" }));
+  const back = await screen.findByRole("region", { name: "Artist" });
+  fireEvent.click(within(back).getByRole("tab", { name: "Playlists" }));
+  const playlists = await screen.findByRole("region", { name: "Artist playlists" });
+  expect(within(playlists).getByText("Radio Mix")).toBeTruthy();
+  expect(within(playlists).queryByText("Night LP")).toBeNull();
+});
+
+test("playlist authors link to their artist page", async () => {
+  const playlist: Playlist = {
+    id: "81", title: "Night Mix", author: "Curator", artworkUrl: null,
+    trackCount: 3, durationMs: null, source: "soundcloud",
+    sourceUrl: "https://soundcloud.com/curator/sets/night-mix",
+  };
+  const artist = { id: "9", name: "Curator", avatarUrl: null, trackCount: 12, sourceUrl: "https://soundcloud.com/curator" };
+  vi.mocked(api.searchPlaylists).mockResolvedValue({ playlists: [playlist], nextPageToken: null });
+  vi.mocked(api.artistTracks).mockResolvedValue({ artist, tracks: [track], albums: [], playlists: [] });
+  render(<App settings={createMemorySettingsStore()} />);
+  fireEvent.click(screen.getByRole("tab", { name: "Playlists" }));
+  fireEvent.change(screen.getByLabelText("Playlist name"), { target: { value: "night" } });
+  fireEvent.click(screen.getByRole("button", { name: "Search" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Open artist Curator" }));
+  await waitFor(() => expect(api.artistTracks).toHaveBeenCalledWith(expect.any(Number), "https://soundcloud.com/curator"));
+  const hero = await screen.findByRole("region", { name: "Artist" });
+  expect(within(hero).getByText("Curator")).toBeTruthy();
+  expect(within(hero).getByRole("button", { name: "Play artist" })).toBeTruthy();
 });

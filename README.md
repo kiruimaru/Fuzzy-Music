@@ -21,8 +21,10 @@ Liking a SoundCloud track queues one disk download, using the best available
 source audio by default. Settings offer lower bitrate preferences and a folder
 chooser. Download failures remain visible and can be retried. The application
 indexes supported audio in that folder at startup and can play it offline.
-Removing a favourite never deletes its downloaded file. Download only tracks
-you have permission to keep; available formats depend on the source.
+Removing a favourite never deletes its downloaded file. A separate delete action
+in Favourites and the Music library removes the library entry together with its
+downloaded file and drops the track from any downloaded playlist. Download only
+tracks you have permission to keep; available formats depend on the source.
 FLAC conversion requires `ffmpeg` on PATH and cannot recover quality lost in
 the source stream. Changing quality affects future downloads only.
 
@@ -33,8 +35,14 @@ cannot search playlists. See decision 0006 and
 [`tasks/playlist-search.md`](tasks/playlist-search.md). Playlists can be
 bookmarked like tracks; a bookmark appears in Favourites and plays online until
 the user explicitly downloads the whole playlist for offline use. See decision
-0011. Integration checks and accepted review follow-ups are recorded in
-[`tasks/pr20-pr23-integration.md`](tasks/pr20-pr23-integration.md).
+0011. Artist names everywhere — track rows, playlist cards and headers, the
+queue and the now-playing panel — open the artist's public page inside the app,
+which uses a dedicated banner layout rather than the playlist header and
+separates the catalog into Tracks, Albums and Playlists tabs with counts. Play
+starts their list so the next track follows automatically, and the same list
+behavior applies to search results, playlists, Favourites and the music library.
+See decision 0012. Integration checks and accepted review follow-ups
+are recorded in [`tasks/pr20-pr23-integration.md`](tasks/pr20-pr23-integration.md).
 Session queue behavior and #22 acceptance are recorded in
 [`tasks/playback-queue-22.md`](tasks/playback-queue-22.md).
 

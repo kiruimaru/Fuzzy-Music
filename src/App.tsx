@@ -45,17 +45,21 @@ function StopIcon() {
 
 type QueueEntry = { key: number; track: Track };
 
-/// SoundCloud track URLs are one artist segment plus a track slug.
-function artistUrlOf(track: Track): string | null {
-  if (track.source !== "soundcloud") return null;
+/// SoundCloud pages start with the artist's permalink segment, so any track
+/// or playlist URL yields the owning artist page.
+function soundcloudArtistUrl(sourceUrl: string): string | null {
   try {
-    const url = new URL(track.sourceUrl);
-    if (!/^(www\.)?soundcloud\.com$/.test(url.hostname)) return null;
+    const url = new URL(sourceUrl);
+    if (url.protocol !== "https:" || !/^(www\.)?soundcloud\.com$/.test(url.hostname)) return null;
     const [slug] = url.pathname.split("/").filter(Boolean);
-    return slug ? `${url.origin}/${slug}` : null;
+    return slug ? `https://soundcloud.com/${slug}` : null;
   } catch {
     return null;
   }
+}
+
+function artistUrlOf(track: Track): string | null {
+  return track.source === "soundcloud" ? soundcloudArtistUrl(track.sourceUrl) : null;
 }
 
 export function App({ settings = settingsStore }: { settings?: SettingsStore }) {
@@ -359,10 +363,11 @@ export function App({ settings = settingsStore }: { settings?: SettingsStore }) 
     }
   }
 
-  async function openArtistTracks(track: Track) {
-    const url = artistUrlOf(track);
-    if (!url) return;
+  async function loadArtist(url: string) {
     const generation = ++artistGeneration.current;
+    // Artist pages live in the track tab; keep search results for the back button.
+    setView("tracks");
+    setOpenPlaylist(null);
     setArtistLoading(true);
     setArtistError("");
     setOpenArtist(null);
@@ -376,6 +381,19 @@ export function App({ settings = settingsStore }: { settings?: SettingsStore }) 
     } finally {
       if (generation === artistGeneration.current) setArtistLoading(false);
     }
+  }
+
+  async function openArtistTracks(track: Track) {
+    const url = artistUrlOf(track);
+    if (url) await loadArtist(url);
+  }
+
+  /// Every visible artist name opens the same page; plain text when no page exists.
+  function artistLink(name: string, url: string | null, className = "artist-link") {
+    if (!name) return null;
+    if (!url) return <span className={`artist-plain ${className}`}>{name}</span>;
+    return <button type="button" className={className} title={`Open artist ${name}`}
+      aria-label={`Open artist ${name}`} onClick={() => void loadArtist(url)}>{name}</button>;
   }
 
   async function play(track: Track, fromQueue = false) {
@@ -586,18 +604,36 @@ export function App({ settings = settingsStore }: { settings?: SettingsStore }) 
   }
 
   async function toggleFavourite(track: Track) {
-    const existing = libraryRef.current.find(entry => entry.track.source === track.source && entry.track.id === track.id);
+    const matches = (entry: LibraryEntry) =>
+      entry.track.source === track.source && entry.track.id === track.id;
+    const existing = libraryRef.current.find(matches);
+    const liked = !existing?.favourite;
+    // Unliking removes the row immediately; the refresh below reconciles with
+    // the store and restores the entry if the write fails.
+    libraryRef.current = liked
+      ? libraryRef.current.map(entry => matches(entry) ? { ...entry, favourite: true } : entry)
+      : libraryRef.current.filter(entry => !matches(entry));
+    setLibrary(libraryRef.current);
     try {
-      await api.favourite(track, !existing?.favourite);
+      await api.favourite(track, liked);
       await refreshLibrary();
-    } catch { setLibraryError("Could not update favourites."); }
+    } catch {
+      setLibraryError("Could not update favourites.");
+      await refreshLibrary();
+    }
   }
 
   async function togglePlaylistFavourite(playlist: Playlist) {
+    const liked = !savedPlaylist(playlist)?.favourite;
+    setSavedPlaylists(previous => previous.map(entry =>
+      entry.playlist.sourceUrl === playlist.sourceUrl ? { ...entry, favourite: liked } : entry));
     try {
-      await api.favouritePlaylist(playlist, !savedPlaylist(playlist)?.favourite);
+      await api.favouritePlaylist(playlist, liked);
       await refreshLibrary();
-    } catch { setLibraryError("Could not update favourite playlists."); }
+    } catch {
+      setLibraryError("Could not update favourite playlists.");
+      await refreshLibrary();
+    }
   }
 
   async function downloadPlaylist(playlist: Playlist) {
@@ -654,7 +690,9 @@ export function App({ settings = settingsStore }: { settings?: SettingsStore }) 
           <SourceIcon track={track} />
           <span className="row-duration">{track.durationMs === null ? "--:--" : time(track.durationMs)}</span>
           <button className={liked ? "row-play liked" : "row-play"}
-            title={`Favourite ${track.title}`} aria-label={`Favourite ${track.title}`} onClick={() => void toggleFavourite(track)}><Heart /></button>
+            title={liked ? `Remove ${track.title} from favourites` : `Favourite ${track.title}`}
+            aria-label={liked ? `Remove ${track.title} from favourites` : `Favourite ${track.title}`}
+            onClick={() => void toggleFavourite(track)}><Heart /></button>
           <button className="row-play" title={`Add ${track.title} to queue`}
             onClick={() => addToQueue(track)} aria-label={`Add ${track.title} to queue`}><ListPlus /></button>
           <button className="row-play" disabled={!settingsReady} title={`Play ${track.title}`}
@@ -748,7 +786,7 @@ export function App({ settings = settingsStore }: { settings?: SettingsStore }) 
         <ol>{libraryEntries.map((entry, index) =>
           <li key={entry.id}>
             <Artwork track={entry.track} size="small" />
-            <div className="row-text"><strong>{entry.track.title}</strong><span>{entry.track.author} · {
+            <div className="row-text"><strong>{entry.track.title}</strong><span>{artistLink(entry.track.author, artistUrlOf(entry.track), "artist-link inline")} · {
               entry.availableOffline ? "Available offline" : entry.downloadState === "downloading" ? "Downloading" :
               entry.downloadState === "pending" ? "Waiting to download" : entry.downloadState === "error" ? "Download failed" :
               entry.downloadState === "missing" ? "File missing" : "Online"
@@ -770,7 +808,7 @@ export function App({ settings = settingsStore }: { settings?: SettingsStore }) 
               {entry.playlist.artworkUrl
                 ? <img className="artwork artwork-small" src={entry.playlist.artworkUrl} alt="" loading="lazy" />
                 : <div className="artwork artwork-small artwork-fallback" aria-hidden="true">♪</div>}
-              <div className="row-text"><strong>{entry.playlist.title}</strong><span>{entry.playlist.author} · {
+              <div className="row-text"><strong>{entry.playlist.title}</strong><span>{artistLink(entry.playlist.author, soundcloudArtistUrl(entry.playlist.sourceUrl), "artist-link inline")} · {
                 entry.state === "ready" ? `Downloaded · ${entry.total} ${entry.total === 1 ? "track" : "tracks"}` :
                 entry.total > 0 ? `${entry.downloaded} of ${entry.total} downloaded` :
                 entry.playlist.trackCount === null ? "Playlist" : `${entry.playlist.trackCount} ${entry.playlist.trackCount === 1 ? "track" : "tracks"}`
@@ -794,16 +832,18 @@ export function App({ settings = settingsStore }: { settings?: SettingsStore }) 
           {playlists.map(playlist => {
             const saved = savedPlaylist(playlist);
             return <div key={playlist.id} className="playlist-card-wrap">
-              <button className="playlist-card" onClick={() => void openPlaylistTracks(playlist)} aria-label={`Open playlist ${playlist.title}`}>
-                {playlist.artworkUrl
-                  ? <img className="playlist-cover" src={playlist.artworkUrl} alt="" loading="lazy" />
-                  : <div className="playlist-cover artwork-fallback" aria-hidden="true">♪</div>}
-                <strong>{playlist.title}</strong>
-                <span>{playlist.author}</span>
+              <div className="playlist-card">
+                <button className="playlist-card-open" onClick={() => void openPlaylistTracks(playlist)} aria-label={`Open playlist ${playlist.title}`}>
+                  {playlist.artworkUrl
+                    ? <img className="playlist-cover" src={playlist.artworkUrl} alt="" loading="lazy" />
+                    : <div className="playlist-cover artwork-fallback" aria-hidden="true">♪</div>}
+                  <strong>{playlist.title}</strong>
+                </button>
+                {artistLink(playlist.author, soundcloudArtistUrl(playlist.sourceUrl), "artist-link playlist-author")}
                 <span className="playlist-meta">
                   {playlist.trackCount === null ? "Playlist" : `${playlist.trackCount} ${playlist.trackCount === 1 ? "track" : "tracks"}`}
                 </span>
-              </button>
+              </div>
               <button className={saved?.favourite ? "row-play liked playlist-card-like" : "row-play playlist-card-like"}
                 title={saved?.favourite ? `Remove playlist ${playlist.title} from favourites` : `Favourite playlist ${playlist.title}`}
                 aria-label={saved?.favourite ? `Remove playlist ${playlist.title} from favourites` : `Favourite playlist ${playlist.title}`}
@@ -829,7 +869,7 @@ export function App({ settings = settingsStore }: { settings?: SettingsStore }) 
               <p className="eyebrow">Playlist</p>
               <h2>{openPlaylist.playlist.title}</h2>
               <p className="playlist-by">
-                {openPlaylist.playlist.author} · {tracks.length} of{" "}
+                {artistLink(openPlaylist.playlist.author, soundcloudArtistUrl(openPlaylist.playlist.sourceUrl), "artist-link inline")} · {tracks.length} of{" "}
                 {openPlaylist.playlist.trackCount ?? tracks.length}{" "}
                 {(openPlaylist.playlist.trackCount ?? tracks.length) === 1 ? "track" : "tracks"}
               </p>
@@ -859,22 +899,25 @@ export function App({ settings = settingsStore }: { settings?: SettingsStore }) 
         </section>}
 
       {view === "tracks" && openArtist &&
-        <section className="playlist-header" aria-label="Artist">
+        <section className="artist-page" aria-label="Artist">
           <button className="ghost small" onClick={() => setOpenArtist(null)}>← Back to search</button>
-          <div className="playlist-hero">
+          <div className="artist-banner">
+            {openArtist.artist.avatarUrl && <img className="artist-backdrop" src={openArtist.artist.avatarUrl} alt="" aria-hidden="true" />}
             {openArtist.artist.avatarUrl
-              ? <img className="playlist-hero-cover" src={openArtist.artist.avatarUrl} alt="" />
-              : <div className="playlist-hero-cover artwork-fallback" aria-hidden="true">♪</div>}
-            <div>
+              ? <img className="artist-avatar" src={openArtist.artist.avatarUrl} alt="" />
+              : <div className="artist-avatar artwork-fallback" aria-hidden="true">♪</div>}
+            <div className="artist-info">
               <p className="eyebrow">Artist</p>
               <h2>{openArtist.artist.name}</h2>
-              <p className="playlist-by">
+              <p className="artist-stats">
                 {openArtist.tracks.length} {openArtist.tracks.length === 1 ? "track" : "tracks"}
+                {openArtist.artist.trackCount !== null && openArtist.artist.trackCount > openArtist.tracks.length
+                  ? ` · ${openArtist.artist.trackCount} on SoundCloud` : ""}
               </p>
+              <div className="artist-actions">
+                <button className="primary" onClick={() => playList(openArtist.tracks)} disabled={!openArtist.tracks.length || !settingsReady}>Play artist</button>
+              </div>
             </div>
-          </div>
-          <div className="playlist-actions">
-            <button className="primary" onClick={() => playList(openArtist.tracks)} disabled={!openArtist.tracks.length || !settingsReady}>Play artist</button>
           </div>
         </section>}
 
@@ -889,6 +932,7 @@ export function App({ settings = settingsStore }: { settings?: SettingsStore }) 
 
       {view === "tracks" && openArtist && openArtist.tracks.length > 0 &&
         <section aria-label="Artist tracks" className="results">
+          <div className="artist-tracks-heading"><h3>Tracks</h3><span>{openArtist.tracks.length} {openArtist.tracks.length === 1 ? "track" : "tracks"}</span></div>
           <div className="results-head"><span>#</span><span /><span>Title</span><span /><span>Time</span><span /><span /><span /></div>
           {trackRows(openArtist.tracks)}
         </section>}
@@ -960,7 +1004,7 @@ export function App({ settings = settingsStore }: { settings?: SettingsStore }) 
                 const current = playbackOrigin.current === "session" && queueIndex === index;
                 return <li key={entry.key} aria-current={current ? "true" : undefined}>
                   <Artwork track={entry.track} size="small" />
-                  <div className="row-text"><strong>{entry.track.title}</strong><span>{entry.track.author}</span></div>
+                  <div className="row-text"><strong>{entry.track.title}</strong><span>{artistLink(entry.track.author, artistUrlOf(entry.track), "artist-link inline")}</span></div>
                   <button className="row-play" disabled={!settingsReady} title={`Play queued ${entry.track.title}`}
                     aria-label={`Play queued ${entry.track.title}`} onClick={() => selectQueue(entry.key)}><PlayIcon /></button>
                   <button className="row-play" title={`Remove ${entry.track.title} from queue`}
@@ -975,7 +1019,7 @@ export function App({ settings = settingsStore }: { settings?: SettingsStore }) 
       <div className="now-playing">
         <Artwork track={selected} size="small" />
         <div className="now-text"><strong>{selected ? selected.title : "No track selected"}</strong>
-          <span>{selected ? selected.author : "Search to begin"}</span></div>
+          <span>{selected ? artistLink(selected.author, artistUrlOf(selected), "artist-link inline") : "Search to begin"}</span></div>
       </div>
       {playError && playback !== "error" && <p className="player-error" role="alert">{playError}</p>}
       {settingsError && <p className="player-error" role="alert">{settingsError}</p>}

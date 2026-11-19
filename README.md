@@ -33,10 +33,12 @@ cannot search playlists. See decision 0006 and
 [`tasks/playlist-search.md`](tasks/playlist-search.md). Playlists can be
 bookmarked like tracks; a bookmark appears in Favourites and plays online until
 the user explicitly downloads the whole playlist for offline use. See decision
-0011. Artist names in track rows open the artist's public page inside the app;
-Play starts their list so the next track follows automatically, and the same
-list behavior applies to search results, playlists, Favourites and the music
-library. See decision 0012. Integration checks and accepted review follow-ups
+0011. Artist names everywhere — track rows, playlist cards and headers, the
+queue and the now-playing panel — open the artist's public page inside the app,
+which uses a dedicated banner layout rather than the playlist header. Play
+starts their list so the next track follows automatically, and the same list
+behavior applies to search results, playlists, Favourites and the music library.
+See decision 0012. Integration checks and accepted review follow-ups
 are recorded in [`tasks/pr20-pr23-integration.md`](tasks/pr20-pr23-integration.md).
 Session queue behavior and #22 acceptance are recorded in
 [`tasks/playback-queue-22.md`](tasks/playback-queue-22.md).

@@ -26,8 +26,10 @@ state returns to idle and the bookmark with its full track list is preserved, so
 Download resumes the work later. Downloading a playlist never marks its tracks
 as favourite; they appear in Favourites only if the listener hearts them
 explicitly. Removing a bookmark keeps downloaded files, matching track favourite
-behaviour. Playlist tracks also stay reachable from the Music library once
-downloaded.
+behaviour. Unliking a track in the Favourites list removes its row immediately
+while the store write runs in the background, and a failed write restores the
+entry on the next refresh. Playlist tracks also stay reachable from the Music
+library once downloaded.
 
 Real SoundCloud playlist downloads, restart acceptance and Windows GUI checks
 remain separate verification work.

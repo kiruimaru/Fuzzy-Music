@@ -779,4 +779,13 @@ the minimal Tauri shell.
 - New commands `artist_tracks` and `cancel_artists`; new `Artist` DTO; response parsing accepts both bare-array and collection track shapes.
 - Verification: workspace tests 58 passed and 4 ignored; frontend 34 tests; clippy clean; Tauri debug build passed.
 
+## 2026-11-19 — Unliking, artist presentation and universal artist links
+
+- Favourite rows now disappear the moment the heart is unclicked: the list updates optimistically and the background refresh reconciles with SQLite, restoring the entry if the write fails. The same applies to bookmarked playlists in Favourites.
+- Heart buttons on track rows now announce Remove from favourites when the track is liked instead of a stale Favourite label, and library rows gained the grid they need when the Retry action makes five buttons.
+- The artist page no longer borrows playlist chrome: it has its own banner with a blurred avatar backdrop, a circular portrait, name, track counts and Play artist, followed by a titled track list.
+- Artist names link to the artist page in all remaining surfaces: Favourites and music-library rows, favourite playlist rows, playlist cards, the playlist header, the session queue and the now-playing panel. Playlist authors are derived from the playlist URL's first path segment; names without a SoundCloud page stay plain text.
+- Playlist cards were restructured so the author link is a real button rather than a nested one inside the open-card button.
+- Verification: frontend 35 tests including immediate-unlike and playlist-author-navigation cases; TypeScript/Vite build passed; Tauri debug build passed.
+
 

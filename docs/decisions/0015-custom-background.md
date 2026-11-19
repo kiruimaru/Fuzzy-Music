@@ -45,3 +45,8 @@ transcoding, the extension is preserved as `background.gif`, and the asset
 protocol serves it to the CSS layer, which keeps the animation running. The
 settings text lists supported formats explicitly so animated backgrounds are
 discoverable.
+
+Animated backgrounds repaint every frame. While one is active the root carries
+`has-animated-background`, the shell surfaces drop `backdrop-filter`, and their
+tint becomes more opaque, so the animation cannot keep the GPU busy blurring
+the whole window. Static images keep the frosted blur.

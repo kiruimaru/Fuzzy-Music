@@ -969,4 +969,12 @@ the minimal Tauri shell.
 - GIF files were already copied untranscoded and can animate as the background; the settings hint now names the supported formats, including animated GIF.
 - Verification: frontend 38 tests passed (background test also asserts the shell class); TypeScript/Vite build and Tauri debug build passed; CSS 21.10 kB (4.82 kB gzip), JS 273.26 kB.
 
+## 2026-11-19 — Playback resilience and animated backgrounds
+
+- Long sessions could stop with a playback error when the player's cached startup entry was evicted while mpv was still reading it; the shell now pins the current track's key, eviction skips pinned entries, and expiry keeps pinned entries alive. Stop and shutdown clear the cache and its pins together.
+- A playback error no longer ends the session with auto-advance enabled: the client tries the next queue track (or the current one at the queue end) with a fresh resolve, at most twice in a row, and resets the counter after a successful play.
+- Animated backgrounds (GIF/WebP/AVIF) set `has-animated-background`; the shell drops `backdrop-filter` for them and raises the tint opacity, so a full-window animation no longer forces continuous GPU blur.
+- mpv now writes a bounded session log to the app data directory (`mpv.log`, truncated above 2 MB) for field diagnostics of playback failures.
+- Verification: frontend 38 tests passed; Rust workspace 62 passed, 4 ignored; rustfmt and strict clippy clean; Tauri debug build passed (CSS 21.50 kB, JS 273.67 kB).
+
 

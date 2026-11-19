@@ -142,6 +142,8 @@ export function App({ settings = settingsStore }: { settings?: SettingsStore }) 
   const prepareGeneration = useRef(generationBase);
   const preparedKey = useRef("");
   const observedTransitions = useRef(0);
+  const recoveryAttempts = useRef(0);
+  const recoveryActive = useRef(false);
   const lookaheadGeneration = useRef(generationBase);
   const lookaheadKey = useRef("");
   const lookaheadTime = useRef(0);
@@ -182,6 +184,11 @@ export function App({ settings = settingsStore }: { settings?: SettingsStore }) 
     );
     root.style.setProperty("--bg-opacity", `${backgroundOpacity}%`);
     root.classList.toggle("has-background", Boolean(preferences.backgroundImage));
+    const extension = preferences.backgroundImage?.split(".").pop()?.toLowerCase() ?? "";
+    root.classList.toggle(
+      "has-animated-background",
+      ["gif", "webp", "avif"].includes(extension),
+    );
   }, [preferences.backgroundImage, backgroundOpacity]);
 
   useEffect(() => () => {
@@ -264,8 +271,31 @@ export function App({ settings = settingsStore }: { settings?: SettingsStore }) 
           setDuration(status.durationMs ?? null);
           setVolume(status.volume ?? 100);
           setSeekable(status.seekable ?? false);
-          if (status.state === "error") setPlayError(status.error ?? "Playback failed. Please retry.");
-          if (status.state === "error") autoAdvance.current = false;
+          if (status.state === "error") {
+            setPlayError(status.error ?? "Playback failed. Please retry.");
+            // A failed transition must not end the whole session: try the next
+            // track (or the current one at the queue end) once or twice.
+            if (!recoveryActive.current && autoAdvance.current && recoveryAttempts.current < 2) {
+              const nextIndex = indexRef.current + 1;
+              const next = queueRef.current[nextIndex];
+              const target = next ?? queueRef.current[indexRef.current];
+              if (target) {
+                recoveryAttempts.current += 1;
+                recoveryActive.current = true;
+                if (next) {
+                  indexRef.current = nextIndex;
+                  setQueueIndex(nextIndex);
+                }
+                preparedKey.current = "";
+                void play(target, true, true);
+              } else {
+                autoAdvance.current = false;
+              }
+            }
+          } else {
+            recoveryActive.current = false;
+            if (status.state === "playing") recoveryAttempts.current = 0;
+          }
           if (playbackOrigin.current === "playlist" && (status.state === "playing" || status.state === "paused")) {
             const next = queueRef.current[indexRef.current + 1];
             const neighbours: Track[] = [];
@@ -456,7 +486,7 @@ export function App({ settings = settingsStore }: { settings?: SettingsStore }) 
       aria-label={`Open artist ${name}`} onClick={() => void loadArtist(url)}>{name}</button>;
   }
 
-  async function play(track: Track, fromQueue = false) {
+  async function play(track: Track, fromQueue = false, forceFresh = false) {
     if (!settingsLoaded.current) return;
     if (!fromQueue) {
       const entry = addToQueue(track);
@@ -486,7 +516,7 @@ export function App({ settings = settingsStore }: { settings?: SettingsStore }) 
       if (local) await api.playLibrary(generation, local.id, preferredVolume.current);
       else if (track.source === "local") throw { code: "storage_failed" };
       else await api.play(generation, track, {
-        fresh: playbackOrigin.current === "session", volume: preferredVolume.current,
+        fresh: forceFresh || playbackOrigin.current === "session", volume: preferredVolume.current,
       });
       if (generation === playbackGeneration.current) setPlayback("starting");
     } catch (error) {

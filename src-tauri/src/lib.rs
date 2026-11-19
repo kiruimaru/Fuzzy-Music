@@ -128,6 +128,8 @@ struct Control {
         fuzzy_application::ResolveTrackResponse,
         std::time::Instant,
     )>,
+    /// Track whose cached startup segments mpv is reading right now.
+    playing_key: Option<String>,
 }
 
 impl Control {
@@ -385,13 +387,15 @@ impl Shell {
                     std::time::Instant::now(),
                 ));
             }
-            let playback_url = (!fresh)
+            let cached_url = (!fresh)
                 .then(|| {
                     self.audio_cache
                         .as_ref()
                         .and_then(|cache| cache.get(&track_url))
                 })
-                .flatten()
+                .flatten();
+            let playback_url = cached_url
+                .clone()
                 .unwrap_or_else(|| stream.stream_url.clone());
             if !fresh
                 && let Some(cache) = &self.audio_cache
@@ -404,6 +408,15 @@ impl Shell {
                 std::thread::spawn(move || cache.warm_at(&key, &source, epoch));
             }
             let playback_volume = control.status.volume;
+            if let Some(cache) = &self.audio_cache {
+                // The previous track is no longer read; release it before
+                // protecting the new one.
+                if let Some(previous) = control.playing_key.take() {
+                    cache.unpin(&previous);
+                }
+                cache.pin(&track_url);
+                control.playing_key = Some(track_url.clone());
+            }
             if let Some(player) = control.player.as_mut() {
                 player.load(&playback_url)?;
                 player.volume(playback_volume)?;
@@ -461,6 +474,11 @@ impl Shell {
         control.lookahead.cancellation.cancel();
         control.prepared = None;
         control.player = None;
+        if let Some(cache) = &self.audio_cache
+            && let Some(previous) = control.playing_key.take()
+        {
+            cache.unpin(&previous);
+        }
         if let Some(volume) = volume {
             control.preferred_volume = Some(volume);
         }
@@ -498,8 +516,15 @@ impl Shell {
             match result {
                 Ok(snapshot) => {
                     if snapshot.advanced
-                        && let Some((_, stream, _)) = control.prepared.take()
+                        && let Some((url, stream, _)) = control.prepared.take()
                     {
+                        if let Some(cache) = &self.audio_cache {
+                            if let Some(previous) = control.playing_key.take() {
+                                cache.unpin(&previous);
+                            }
+                            cache.pin(&url);
+                            control.playing_key = Some(url);
+                        }
                         control.status.track_id = Some(stream.track.id);
                         control.status.transitions += 1;
                     }

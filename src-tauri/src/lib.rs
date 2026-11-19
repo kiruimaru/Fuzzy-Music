@@ -582,6 +582,15 @@ async fn download_playlist(
 }
 
 #[tauri::command]
+async fn cancel_playlist_download(
+    library: tauri::State<'_, LibraryState>,
+    playlist: fuzzy_application::Playlist,
+) -> Result<(), AppError> {
+    let library = library.get()?;
+    worker(move || library.cancel_playlist_download(&playlist)).await
+}
+
+#[tauri::command]
 async fn retry_download(library: tauri::State<'_, LibraryState>, id: i64) -> Result<(), AppError> {
     let library = library.get()?;
     worker(move || library.enqueue(id)).await
@@ -1069,6 +1078,7 @@ pub fn run() {
             playlist_entries,
             set_playlist_favourite,
             download_playlist,
+            cancel_playlist_download,
             retry_download,
             play_library_track,
             choose_music_folder,

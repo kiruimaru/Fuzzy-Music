@@ -10,7 +10,7 @@ use lofty::{
 use rusqlite::{Connection, OptionalExtension, params};
 use serde::{Deserialize, Serialize};
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     fs,
     path::{Path, PathBuf},
     sync::{
@@ -505,6 +505,48 @@ impl Library {
         Ok(ids)
     }
 
+    /// Stop pending and in-flight downloads of a bookmarked playlist without
+    /// removing its bookmark or track list. Returns the affected media ids.
+    pub fn playlist_download_cancel(&self, playlist: &Playlist) -> Result<Vec<i64>, AppError> {
+        valid_playlist(playlist)?;
+        let mut connection = self.connection.lock().map_err(|_| storage_error())?;
+        let transaction = connection.transaction().map_err(|_| storage_error())?;
+        let playlist_id: Option<i64> = transaction
+            .query_row(
+                "SELECT id FROM playlists WHERE source='soundcloud' AND source_id=?1",
+                [&playlist.id],
+                |row| row.get(0),
+            )
+            .optional()
+            .map_err(|_| storage_error())?;
+        let Some(playlist_id) = playlist_id else {
+            return Ok(Vec::new());
+        };
+        let mut statement = transaction
+            .prepare(
+                "SELECT m.id FROM media m JOIN playlist_tracks p ON p.media_id=m.id
+                 WHERE p.playlist_id=?1 AND m.path IS NULL
+                   AND m.download_state IN ('pending','downloading')",
+            )
+            .map_err(|_| storage_error())?;
+        let ids = statement
+            .query_map([playlist_id], |row| row.get::<_, i64>(0))
+            .map_err(|_| storage_error())?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|_| storage_error())?;
+        drop(statement);
+        for id in &ids {
+            transaction
+                .execute(
+                    "UPDATE media SET download_state='none',error=NULL WHERE id=?1 AND path IS NULL",
+                    [id],
+                )
+                .map_err(|_| storage_error())?;
+        }
+        transaction.commit().map_err(|_| storage_error())?;
+        Ok(ids)
+    }
+
     fn state(&self, id: i64, state: &str, error: Option<&str>) -> Result<(), AppError> {
         self.connection
             .lock()
@@ -663,6 +705,9 @@ pub struct LibraryService {
     pub library: Library,
     sender: Mutex<Option<SyncSender<i64>>>,
     tokens: Mutex<HashMap<i64, CancellationToken>>,
+    // Ids explicitly cancelled with their playlist. The worker must not
+    // re-enqueue them through the favourite-toggle safety net.
+    cancelled: Mutex<HashSet<i64>>,
     worker: Mutex<Option<JoinHandle<()>>>,
     closing: AtomicBool,
 }
@@ -675,6 +720,7 @@ impl LibraryService {
             library,
             sender: Mutex::new(Some(sender)),
             tokens: Mutex::new(HashMap::new()),
+            cancelled: Mutex::new(HashSet::new()),
             worker: Mutex::new(None),
             closing: AtomicBool::new(false),
         });
@@ -686,6 +732,9 @@ impl LibraryService {
                 if service.closing.load(Ordering::Acquire) {
                     break;
                 }
+                // A playlist cancellation interrupts work that is already running
+                // and skips ids that are still waiting in the channel.
+                let cancelled = service.take_cancelled(id);
                 let token = service
                     .tokens
                     .lock()
@@ -693,7 +742,7 @@ impl LibraryService {
                     .get(&id)
                     .cloned();
                 let Some(token) = token else { continue };
-                if !token.is_cancelled() {
+                if !cancelled && !token.is_cancelled() {
                     let result = service.download(id, &client, token.clone());
                     if let Err(error) = result {
                         let state = if token.is_cancelled() {
@@ -715,7 +764,11 @@ impl LibraryService {
                     .lock()
                     .unwrap_or_else(|e| e.into_inner())
                     .remove(&id);
+                // A playlist cancellation must never be undone by the requeue
+                // safety net used for rapid favourite toggling.
                 if token.is_cancelled()
+                    && !cancelled
+                    && !service.take_cancelled(id)
                     && !service.closing.load(Ordering::Acquire)
                     && service.library.needs_download(id)
                 {
@@ -754,7 +807,29 @@ impl LibraryService {
         Ok(())
     }
 
+    /// Stop pending and in-flight downloads for a playlist. The bookmark and its
+    /// track list stay intact so a later download request can resume them.
+    pub fn cancel_playlist_download(&self, playlist: &Playlist) -> Result<(), AppError> {
+        let ids = self.library.playlist_download_cancel(playlist)?;
+        if ids.is_empty() {
+            return Ok(());
+        }
+        let mut cancelled = self.cancelled.lock().map_err(|_| storage_error())?;
+        let tokens = self.tokens.lock().map_err(|_| storage_error())?;
+        for id in ids {
+            cancelled.insert(id);
+            if let Some(token) = tokens.get(&id) {
+                token.cancel();
+            }
+        }
+        Ok(())
+    }
+
     pub fn enqueue(&self, id: i64) -> Result<(), AppError> {
+        self.cancelled
+            .lock()
+            .map_err(|_| storage_error())?
+            .remove(&id);
         let entry = self.library.entry(id)?;
         if entry.track.source == Source::Local || entry.available_offline {
             return Ok(());
@@ -886,6 +961,13 @@ impl LibraryService {
             )
             .map_err(|_| storage_error())?;
         Ok(())
+    }
+
+    fn take_cancelled(&self, id: i64) -> bool {
+        self.cancelled
+            .lock()
+            .map(|mut set| set.remove(&id))
+            .unwrap_or(false)
     }
 
     pub fn shutdown(&self) {
@@ -1145,6 +1227,65 @@ mod tests {
                 .unwrap()
                 .iter()
                 .all(|entry| entry.available_offline)
+        );
+        service.shutdown();
+    }
+
+    #[test]
+    fn playlist_download_can_be_cancelled_without_losing_bookmark_or_favourites() {
+        let dir = tempfile::tempdir().unwrap();
+        let music = dir.path().join("music");
+        fs::create_dir(&music).unwrap();
+        let executable = fixture_executable(dir.path());
+        let service = LibraryService::start(
+            Library::open(dir.path(), &music).unwrap(),
+            executable,
+            NetworkPolicy::default(),
+        );
+        service.set_playlist_favourite(playlist(), true).unwrap();
+        service
+            .download_playlist(playlist(), vec![track("slow_block_one"), track("two")])
+            .unwrap();
+        let entries = service.library.entries().unwrap();
+        let first = entries
+            .iter()
+            .find(|entry| entry.track.id == "slow_block_one")
+            .unwrap()
+            .id;
+        let second = entries
+            .iter()
+            .find(|entry| entry.track.id == "two")
+            .unwrap()
+            .id;
+        wait_for(&service, first, "downloading");
+        service.cancel_playlist_download(&playlist()).unwrap();
+        assert_eq!(wait_for(&service, first, "none").download_state, "none");
+        assert_eq!(
+            service.library.entry(second).unwrap().download_state,
+            "none"
+        );
+        // The worker must not requeue cancelled ids after its download aborts.
+        let deadline = Instant::now() + Duration::from_secs(4);
+        while Instant::now() < deadline {
+            assert_eq!(service.library.entry(first).unwrap().download_state, "none");
+            assert_eq!(
+                service.library.entry(second).unwrap().download_state,
+                "none"
+            );
+            std::thread::sleep(Duration::from_millis(100));
+        }
+        // Bookmark survives, tracks stay outside favourites and nothing is saved.
+        let saved = service.library.playlists().unwrap();
+        assert!(saved[0].favourite);
+        assert_eq!(saved[0].state, "idle");
+        assert_eq!(saved[0].downloaded, 0);
+        assert!(
+            service
+                .library
+                .entries()
+                .unwrap()
+                .iter()
+                .all(|entry| !entry.favourite && !entry.available_offline)
         );
         service.shutdown();
     }

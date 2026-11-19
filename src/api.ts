@@ -66,6 +66,7 @@ export const api = {
   favouritePlaylist: (playlist: Playlist, liked: boolean) =>
     invoke<void>("set_playlist_favourite", { playlist, liked }),
   downloadPlaylist: (playlist: Playlist) => invoke<void>("download_playlist", { playlist }),
+  cancelPlaylistDownload: (playlist: Playlist) => invoke<void>("cancel_playlist_download", { playlist }),
   retryDownload: (id: number) => invoke<void>("retry_download", { id }),
   chooseFolder: () => invoke<string | null>("choose_music_folder"),
   playLibrary: (generation: number, id: number, volume: number) =>

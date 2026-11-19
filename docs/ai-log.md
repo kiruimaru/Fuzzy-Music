@@ -764,4 +764,11 @@ the minimal Tauri shell.
 - UI adds hearts on playlist cards and the playlist header, a Favourite playlists section and open/download actions; work is stacked on PR #25 and recorded in `docs/decisions/0011-playlist-favourites.md`.
 - Verification: cargo fmt clean; workspace tests 54 passed and 4 ignored; frontend 32 tests; TypeScript/Vite build passed.
 
+## 2026-11-19 — Playlist download cancellation
+
+- A running playlist download can now be cancelled from the Favourite playlists list and the playlist header; pending and in-flight media return to idle while the bookmark, track list and downloaded files stay untouched, so Download can resume later.
+- The library service tracks explicitly cancelled media ids so its requeue safety net cannot restart them; the same cancellation token still interrupts the running yt-dlp download.
+- Playlist downloads continue to never mark tracks as favourites, and a test asserts cancelled playlist tracks stay out of Favourites.
+- Verification: added a fixture-backed cancellation test (in-flight abort, queued ids skipped, no requeue, bookmark kept, no favourites).
+
 

@@ -17,7 +17,6 @@ Bookmark SoundCloud playlists like tracks, and optionally download an entire boo
 
 - User-created/custom playlists and their editing.
 - Automatic download when liking a playlist.
-- Cancelling a whole playlist download from the UI.
 - Provider work beyond public SoundCloud playlists.
 
 ## Context
@@ -42,11 +41,12 @@ Bookmark SoundCloud playlists like tracks, and optionally download an entire boo
 - Single-worker integration: playlist tracks reuse favourite download states, retry and offline playback; queue capacity 1024; 1000-track request cap.
 - Tauri commands `playlist_entries`, `set_playlist_favourite`, `download_playlist`.
 - UI: playlist card hearts, header actions, Favourites playlist section, download progress, open-from-favourites.
-- Tests: Rust bookmark/download flow; frontend bookmark/download flow.
+- Download cancellation from the playlist header and Favourites: pending and in-flight tracks return to idle, the bookmark and files are preserved, and the worker cannot requeue cancelled ids. Playlist tracks stay outside track favourites.
+- Tests: Rust bookmark/download flow and cancellation; frontend bookmark/download flow and cancellation.
 
 ### Remaining
 
-- Manual GUI acceptance on Windows: like, download progress, restart, offline playback.
+- Manual GUI acceptance on Windows: like, download progress, cancel, restart, offline playback.
 - Real playlist download against SoundCloud through the user's proxy.
 - Coordinate favourites/settings overlap with #21 owner (pre-existing PR #25 note).
 
@@ -60,7 +60,7 @@ clean
 cargo test --workspace --all-targets --locked
 54 passed, 4 ignored
 npm test
-32 passed
+33 passed
 npm run tauri -- build --debug --no-bundle
 build passed
 ```

@@ -2,7 +2,7 @@
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { App } from "./App";
-import { api, safeMessage, type Playlist, type Track } from "./api";
+import { api, safeMessage, type LibraryEntry, type Playlist, type Track } from "./api";
 import { createMemorySettingsStore, type SettingsStore } from "./settings";
 
 vi.mock("./api", async (original) => ({
@@ -24,6 +24,7 @@ vi.mock("./api", async (original) => ({
     scanLibrary: vi.fn().mockResolvedValue({ imported: 0, skipped: 0, truncated: false }),
     favourite: vi.fn().mockResolvedValue(undefined), retryDownload: vi.fn().mockResolvedValue(undefined),
     favouritePlaylist: vi.fn().mockResolvedValue(undefined), downloadPlaylist: vi.fn().mockResolvedValue(undefined),
+    cancelPlaylistDownload: vi.fn().mockResolvedValue(undefined),
     playLibrary: vi.fn().mockResolvedValue(undefined), chooseFolder: vi.fn(),
   },
 }));
@@ -675,6 +676,29 @@ test("playlists are bookmarked and downloaded on request", async () => {
   await waitFor(() => expect(api.downloadPlaylist).toHaveBeenCalledWith(playlist));
   fireEvent.click(within(favourites).getByRole("button", { name: "Remove playlist Evening Mix from favourites" }));
   await waitFor(() => expect(api.favouritePlaylist).toHaveBeenCalledWith(playlist, false));
+});
+
+test("playlist download can be cancelled and its tracks stay out of favourites", async () => {
+  const playlist: Playlist = {
+    id: "78", title: "Morning Mix", author: "Curator", artworkUrl: null,
+    trackCount: 3, durationMs: null, source: "soundcloud",
+    sourceUrl: "https://soundcloud.com/curator/sets/morning-mix",
+  };
+  const downloading = { id: 4, playlist, favourite: true, downloaded: 1, total: 3, state: "downloading" as const };
+  const downloaded: LibraryEntry = {
+    id: 9, track, favourite: false, downloadState: "ready", error: null, availableOffline: true,
+  };
+  vi.mocked(api.playlistEntries).mockResolvedValue([downloading]);
+  vi.mocked(api.library).mockResolvedValue([downloaded]);
+  render(<App settings={createMemorySettingsStore()} />);
+  fireEvent.click(screen.getByRole("button", { name: "Favourites" }));
+  const playlists = await screen.findByRole("region", { name: "Favourite playlists" });
+  expect(within(playlists).getByText("1 of 3 downloaded", { exact: false })).toBeTruthy();
+  fireEvent.click(within(playlists).getByRole("button", { name: "Cancel download of playlist Morning Mix" }));
+  await waitFor(() => expect(api.cancelPlaylistDownload).toHaveBeenCalledWith(playlist));
+  const tracks = screen.getByRole("region", { name: "Favourite tracks" });
+  expect(within(tracks).queryByText("Example")).toBeNull();
+  expect(within(tracks).getByText("No favourites yet.")).toBeTruthy();
 });
 
 test("settings change quality and folder, then rescan without resetting volume", async () => {

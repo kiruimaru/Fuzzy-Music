@@ -20,9 +20,14 @@ downloads.
 
 The UI exposes hearts on playlist cards and in the playlist header, a Favourites
 section for bookmarked playlists with per-playlist progress, and a Download
-action that can be repeated to retry failed tracks. Removing a bookmark keeps
-downloaded files, matching track favourite behaviour. Playlist tracks also stay
-reachable from the Music library once downloaded.
+action that can be repeated to retry failed tracks. While a playlist download is
+running the same action becomes Cancel: pending and in-flight tracks stop, their
+state returns to idle and the bookmark with its full track list is preserved, so
+Download resumes the work later. Downloading a playlist never marks its tracks
+as favourite; they appear in Favourites only if the listener hearts them
+explicitly. Removing a bookmark keeps downloaded files, matching track favourite
+behaviour. Playlist tracks also stay reachable from the Music library once
+downloaded.
 
 Real SoundCloud playlist downloads, restart acceptance and Windows GUI checks
 remain separate verification work.

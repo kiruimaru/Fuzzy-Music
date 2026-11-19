@@ -564,6 +564,13 @@ export function App({ settings = settingsStore }: { settings?: SettingsStore }) 
     } catch (error) { setLibraryError(safeMessage(error)); }
   }
 
+  async function cancelPlaylistDownload(playlist: Playlist) {
+    try {
+      await api.cancelPlaylistDownload(playlist);
+      await refreshLibrary();
+    } catch (error) { setLibraryError(safeMessage(error)); }
+  }
+
   function openSavedPlaylist(playlist: Playlist) {
     setView("playlists");
     setOpenPlaylist(null);
@@ -694,6 +701,9 @@ export function App({ settings = settingsStore }: { settings?: SettingsStore }) 
                 entry.total > 0 ? `${entry.downloaded} of ${entry.total} downloaded` :
                 entry.playlist.trackCount === null ? "Playlist" : `${entry.playlist.trackCount} ${entry.playlist.trackCount === 1 ? "track" : "tracks"}`
               }</span></div>
+              {entry.state === "downloading" &&
+                <button className="row-play" title={`Cancel download of playlist ${entry.playlist.title}`} aria-label={`Cancel download of playlist ${entry.playlist.title}`}
+                  onClick={() => void cancelPlaylistDownload(entry.playlist)}><X /></button>}
               {entry.state !== "ready" && entry.state !== "downloading" &&
                 <button className="row-play" title={`Download playlist ${entry.playlist.title}`} aria-label={`Download playlist ${entry.playlist.title}`}
                   onClick={() => void downloadPlaylist(entry.playlist)}><Download /></button>}
@@ -763,9 +773,12 @@ export function App({ settings = settingsStore }: { settings?: SettingsStore }) 
               title={currentSavedPlaylist?.favourite ? `Remove playlist ${openPlaylist.playlist.title} from favourites` : `Favourite playlist ${openPlaylist.playlist.title}`}
               aria-label={currentSavedPlaylist?.favourite ? `Remove playlist ${openPlaylist.playlist.title} from favourites` : `Favourite playlist ${openPlaylist.playlist.title}`}
               onClick={() => void togglePlaylistFavourite(openPlaylist.playlist)}><Heart /></button>
-            <button className="ghost small" disabled={!tracks.length || currentSavedPlaylist?.state === "downloading"}
-              title={`Download playlist ${openPlaylist.playlist.title}`} aria-label={`Download playlist ${openPlaylist.playlist.title}`}
-              onClick={() => void downloadPlaylist(openPlaylist.playlist)}><Download /></button>
+            {currentSavedPlaylist?.state === "downloading"
+              ? <button className="ghost small" title={`Cancel download of playlist ${openPlaylist.playlist.title}`} aria-label={`Cancel download of playlist ${openPlaylist.playlist.title}`}
+                  onClick={() => void cancelPlaylistDownload(openPlaylist.playlist)}><X /></button>
+              : <button className="ghost small" disabled={!tracks.length}
+                  title={`Download playlist ${openPlaylist.playlist.title}`} aria-label={`Download playlist ${openPlaylist.playlist.title}`}
+                  onClick={() => void downloadPlaylist(openPlaylist.playlist)}><Download /></button>}
             {currentSavedPlaylist && currentSavedPlaylist.total > 0 &&
               <span className="playlist-by">{currentSavedPlaylist.state === "ready" ? "Available offline" : `${currentSavedPlaylist.downloaded} of ${currentSavedPlaylist.total} downloaded`}</span>}
           </div>

@@ -19,8 +19,17 @@ vi.mock("./api", async (original) => ({
     cancelPlaylists: vi.fn().mockResolvedValue(undefined),
     pause: vi.fn().mockResolvedValue(undefined), seek: vi.fn().mockResolvedValue(undefined),
     volume: vi.fn().mockResolvedValue(undefined),
+    library: vi.fn().mockResolvedValue([]),
+    scanLibrary: vi.fn().mockResolvedValue({ imported: 0, skipped: 0, truncated: false }),
+    favourite: vi.fn().mockResolvedValue(undefined), retryDownload: vi.fn().mockResolvedValue(undefined),
+    playLibrary: vi.fn().mockResolvedValue(undefined), chooseFolder: vi.fn(),
   },
 }));
+
+vi.mock("./settings", async (original) => {
+  const module = await original<typeof import("./settings")>();
+  return { ...module, settingsStore: module.createMemorySettingsStore() };
+});
 
 const track: Track = {
   id: "1", title: "Example", author: "Artist", artworkUrl: null,
@@ -51,6 +60,7 @@ beforeEach(() => {
     generation: 0, state: "idle", trackId: null, error: null,
     positionMs: 0, durationMs: null, volume: 100, seekable: false,
   });
+  vi.mocked(api.library).mockResolvedValue([]);
 });
 
 test("stale search success cannot replace newer results", async () => {
@@ -91,6 +101,16 @@ test("empty and safe error allow a new search", async () => {
   expect(screen.queryByText("SECRET")).toBeNull();
   search("retry");
   await screen.findByText("Example");
+});
+
+test("search results show their platform and brand uses the mascot asset", async () => {
+  vi.mocked(api.search).mockResolvedValue({ tracks: [track], nextPageToken: null });
+  render(<App />);
+  const mascot = screen.getByAltText("");
+  expect(mascot.getAttribute("src")).toContain("black");
+  search("music");
+  expect(await screen.findByLabelText("Source: SoundCloud")).toBeTruthy();
+  expect(screen.getByLabelText("Source: SoundCloud").getAttribute("src")).toContain("soundcloud");
 });
 
 test("Stop during resolve ignores late completion and Play can retry", async () => {
@@ -362,7 +382,7 @@ async function openSessionQueue(items = queueTracks, settings?: SettingsStore) {
   for (const item of items) {
     fireEvent.click(await screen.findByRole("button", { name: `Add ${item.title} to queue` }));
   }
-  fireEvent.click(screen.getByRole("tab", { name: `Queue (${items.length})` }));
+  fireEvent.click(screen.getByRole("button", { name: "Queue" }));
   return screen.getByRole("region", { name: "Session queue" });
 }
 
@@ -397,10 +417,11 @@ test("session queue supports selection and boundaries, and survives search and S
   await screen.findByText("2 / 3");
   fireEvent.click(screen.getByRole("button", { name: "Stop" }));
   await screen.findByText("Stopped");
+  fireEvent.click(screen.getByRole("button", { name: "Close queue" }));
   fireEvent.click(screen.getByRole("tab", { name: "Tracks" }));
   search("different search");
   await screen.findByRole("button", { name: "Add Third to queue" });
-  fireEvent.click(screen.getByRole("tab", { name: "Queue (3)" }));
+  fireEvent.click(screen.getByRole("button", { name: "Queue" }));
   expect(within(screen.getByRole("region", { name: "Session queue" })).getAllByRole("listitem")).toHaveLength(3);
   expect(api.play).toHaveBeenCalledTimes(4);
   expect(api.play).toHaveBeenCalledWith(expect.any(Number), queueTracks[0], { fresh: true, volume: 100 });
@@ -460,10 +481,11 @@ test("removing a resolving current item stops and rejects late resolve and old E
 test("duplicate tracks are separate queue entries; deleting current stops without picking another", async () => {
   mockQueueStatus();
   await openSessionQueue([track]);
+  fireEvent.click(screen.getByRole("button", { name: "Close queue" }));
   fireEvent.click(screen.getByRole("tab", { name: "Tracks" }));
   search("duplicate");
   fireEvent.click(await screen.findByRole("button", { name: "Add Example to queue" }));
-  fireEvent.click(screen.getByRole("tab", { name: "Queue (2)" }));
+  fireEvent.click(screen.getByRole("button", { name: "Queue" }));
   const list = screen.getByRole("region", { name: "Session queue" });
   fireEvent.click(within(list).getAllByRole("button", { name: "Play queued Example" })[1]);
   await screen.findByText("2 / 2");
@@ -527,6 +549,27 @@ test("volume is restored before Play, saved, and reused after Stop and another s
   expect(await settings.getSettings()).toEqual({ volume: 25 });
 });
 
+test("volume changes while dragging and coalesces pending values in order", async () => {
+  mockQueueStatus();
+  const pending = deferred<void>();
+  vi.mocked(api.volume).mockReturnValueOnce(pending.promise).mockResolvedValue(undefined);
+  const settings = createMemorySettingsStore({ volume: 50 });
+  const list = await openSessionQueue(queueTracks, settings);
+  fireEvent.click(within(list).getByRole("button", { name: "Play queued Example" }));
+  await screen.findByText("Playing");
+  const slider = screen.getByLabelText("Volume");
+  fireEvent.change(slider, { target: { value: "40" } });
+  expect(api.volume).toHaveBeenCalledTimes(1);
+  expect(api.volume).toHaveBeenLastCalledWith(expect.any(Number), 40);
+  fireEvent.change(slider, { target: { value: "30" } });
+  fireEvent.change(slider, { target: { value: "20" } });
+  expect(api.volume).toHaveBeenCalledTimes(1);
+  await act(async () => pending.resolve());
+  await waitFor(() => expect(api.volume).toHaveBeenCalledTimes(2));
+  expect(api.volume).toHaveBeenLastCalledWith(expect.any(Number), 20);
+  await waitFor(async () => expect((await settings.getSettings()).volume).toBe(20));
+});
+
 test("settings write failures are shown safely and writes are serialized", async () => {
   mockQueueStatus();
   const pending = deferred<{ volume: number }>();
@@ -586,4 +629,50 @@ test("initial settings read gates Play and a failed read falls back without over
   await waitFor(() => expect(api.play).toHaveBeenCalledWith(expect.any(Number), track, { fresh: true, volume: 100 }));
   expect(settings.updateSettings).not.toHaveBeenCalled();
   expect(screen.queryByText("SECRET")).toBeNull();
+});
+
+test("favourite download appears in the library and is played offline", async () => {
+  const entry = { id: 8, track, favourite: true, downloadState: "ready" as const, error: null, availableOffline: true };
+  vi.mocked(api.search).mockResolvedValue({ tracks: [track], nextPageToken: null });
+  vi.mocked(api.library).mockResolvedValueOnce([]).mockResolvedValue([entry]);
+  vi.mocked(api.playLibrary).mockResolvedValue(undefined);
+  render(<App settings={createMemorySettingsStore()} />);
+  search("music");
+  fireEvent.click(await screen.findByRole("button", { name: "Favourite Example" }));
+  await waitFor(() => expect(api.favourite).toHaveBeenCalledWith(track, true));
+  fireEvent.click(screen.getByRole("button", { name: "Favourites" }));
+  const favourites = await screen.findByRole("region", { name: "Favourite tracks" });
+  expect(within(favourites).getByText("Available offline", { exact: false })).toBeTruthy();
+  fireEvent.click(within(favourites).getByRole("button", { name: "Play Example" }));
+  await waitFor(() => expect(api.playLibrary).toHaveBeenCalledWith(expect.any(Number), 8, 100));
+  expect(api.play).not.toHaveBeenCalled();
+  fireEvent.click(within(favourites).getByRole("button", { name: "Remove Example from favourites" }));
+  await waitFor(() => expect(api.favourite).toHaveBeenCalledWith(track, false));
+});
+
+test("settings change quality and folder, then rescan without resetting volume", async () => {
+  const settings = createMemorySettingsStore({ volume: 35, downloadQuality: "best", musicFolder: "/old" });
+  vi.mocked(api.chooseFolder).mockResolvedValue("/new");
+  vi.mocked(api.scanLibrary).mockResolvedValue({ imported: 1, skipped: 0, truncated: false });
+  render(<App settings={settings} />);
+  fireEvent.click(screen.getByRole("button", { name: "Settings" }));
+  await screen.findByText("/old");
+  fireEvent.change(screen.getByLabelText("Download quality"), { target: { value: "small" } });
+  await waitFor(async () => expect((await settings.getSettings()).downloadQuality).toBe("small"));
+  fireEvent.click(screen.getByRole("button", { name: "Choose music folder" }));
+  await screen.findByText("/new");
+  await waitFor(() => expect(api.scanLibrary).toHaveBeenCalled());
+  expect(await settings.getSettings()).toEqual({ volume: 35, downloadQuality: "small", musicFolder: "/new" });
+});
+
+test("theme and FLAC preference are saved and applied", async () => {
+  const settings = createMemorySettingsStore({ volume: 100, theme: "dark" });
+  render(<App settings={settings} />);
+  fireEvent.click(screen.getByRole("button", { name: "Settings" }));
+  await screen.findByDisplayValue("Dark");
+  fireEvent.change(screen.getByLabelText("Theme"), { target: { value: "light" } });
+  await waitFor(() => expect(document.documentElement.dataset.theme).toBe("light"));
+  fireEvent.change(screen.getByLabelText("Download quality"), { target: { value: "flac" } });
+  await screen.findByText(/Requires ffmpeg/);
+  await waitFor(async () => expect(await settings.getSettings()).toMatchObject({ theme: "light", downloadQuality: "flac" }));
 });

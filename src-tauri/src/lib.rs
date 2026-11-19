@@ -1,5 +1,6 @@
 mod audio_cache;
 mod dependencies;
+mod library;
 mod playback;
 
 use fuzzy_application::{
@@ -17,6 +18,14 @@ use std::{
     },
 };
 use tauri::Manager;
+
+struct LibraryState(Option<Arc<library::LibraryService>>);
+
+impl LibraryState {
+    fn get(&self) -> Result<Arc<library::LibraryService>, AppError> {
+        self.0.clone().ok_or_else(library::storage_error)
+    }
+}
 
 /// Nearest neighbours whose audio startup segments are kept in RAM; links only
 /// are cached for the rest of the lookahead.
@@ -404,6 +413,59 @@ impl Shell {
         }
     }
 
+    fn play_local(
+        &self,
+        generation: u64,
+        path: PathBuf,
+        track_id: String,
+        volume: Option<f64>,
+    ) -> Result<(), AppError> {
+        if volume.is_some_and(|v| !v.is_finite() || !(0.0..=100.0).contains(&v)) {
+            return Err(AppError {
+                code: ErrorCode::InvalidInput,
+                message: "Invalid volume.".into(),
+                retryable: false,
+            });
+        }
+        let mut control = self.control.lock().map_err(|_| internal())?;
+        if control.closed {
+            return Err(cancelled());
+        }
+        control.playback.begin(generation)?;
+        control.preparation.cancellation.cancel();
+        control.lookahead.cancellation.cancel();
+        control.prepared = None;
+        control.player = None;
+        if let Some(volume) = volume {
+            control.preferred_volume = Some(volume);
+        }
+        let playback_volume = control.preferred_volume.unwrap_or(control.status.volume);
+        control.status = PlaybackStatus {
+            generation,
+            state: "loading",
+            track_id: Some(track_id),
+            volume: playback_volume,
+            ..Default::default()
+        };
+        let result = playback::Player::start_with_volume(
+            &self.mpv,
+            path.to_str().ok_or_else(internal)?,
+            Some(&self.network),
+            playback_volume,
+        );
+        match result {
+            Ok(player) => {
+                control.player = Some(player);
+                Ok(())
+            }
+            Err(error) => {
+                control.status.state = "error";
+                control.status.error = Some(error.message.clone());
+                Err(error)
+            }
+        }
+    }
+
     fn status(&self) -> Result<PlaybackStatus, AppError> {
         let mut control = self.control.lock().map_err(|_| internal())?;
         if let Some(player) = &mut control.player {
@@ -431,6 +493,103 @@ impl Shell {
         }
         Ok(control.status.clone())
     }
+}
+
+#[tauri::command]
+async fn get_settings(
+    library: tauri::State<'_, LibraryState>,
+) -> Result<library::AppSettings, AppError> {
+    let library = library.get()?;
+    worker(move || library.library.settings()).await
+}
+
+#[tauri::command]
+async fn update_settings(
+    library: tauri::State<'_, LibraryState>,
+    settings: library::SettingsPatch,
+) -> Result<library::AppSettings, AppError> {
+    let library = library.get()?;
+    worker(move || library.library.update_settings(settings)).await
+}
+
+#[tauri::command]
+async fn library_entries(
+    library: tauri::State<'_, LibraryState>,
+) -> Result<Vec<library::LibraryEntry>, AppError> {
+    let library = library.get()?;
+    worker(move || library.library.entries()).await
+}
+
+#[tauri::command]
+async fn scan_library(
+    library: tauri::State<'_, LibraryState>,
+) -> Result<library::ScanResult, AppError> {
+    let library = library.get()?;
+    worker(move || library.library.scan()).await
+}
+
+#[tauri::command]
+async fn set_favourite(
+    library: tauri::State<'_, LibraryState>,
+    track: fuzzy_application::Track,
+    liked: bool,
+) -> Result<(), AppError> {
+    let library = library.get()?;
+    worker(move || library.set_favourite(track, liked)).await
+}
+
+#[tauri::command]
+async fn retry_download(library: tauri::State<'_, LibraryState>, id: i64) -> Result<(), AppError> {
+    let library = library.get()?;
+    worker(move || library.enqueue(id)).await
+}
+
+#[tauri::command]
+async fn play_library_track(
+    shell: tauri::State<'_, Arc<Shell>>,
+    library: tauri::State<'_, LibraryState>,
+    generation: u64,
+    id: i64,
+    volume: Option<f64>,
+) -> Result<(), AppError> {
+    let shell = shell.inner().clone();
+    let library = library.get()?;
+    worker(move || {
+        let result = library
+            .library
+            .entry(id)
+            .and_then(|entry| library.library.path(id).map(|path| (entry, path)));
+        match result {
+            Ok((entry, path)) => shell.play_local(generation, path, entry.track.id, volume),
+            Err(error) => {
+                // Invalid or missing audio is still a new playback intent.
+                shell
+                    .control
+                    .lock()
+                    .map_err(|_| internal())?
+                    .stop(generation)?;
+                Err(error)
+            }
+        }
+    })
+    .await
+}
+
+#[tauri::command]
+async fn choose_music_folder(app: tauri::AppHandle) -> Result<Option<String>, AppError> {
+    use tauri_plugin_dialog::DialogExt;
+    worker(move || {
+        app.dialog()
+            .file()
+            .blocking_pick_folder()
+            .map(|path| {
+                path.into_path()
+                    .map_err(|_| library::storage_error())
+                    .map(|path| path.to_string_lossy().into_owned())
+            })
+            .transpose()
+    })
+    .await
 }
 
 impl Shell {
@@ -833,8 +992,40 @@ async fn update_playback(
 
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
         .manage(Arc::new(Shell::new()))
+        .setup(|app| {
+            let data = app.path().app_data_dir()?;
+            let music = app
+                .path()
+                .audio_dir()
+                .unwrap_or_else(|_| data.clone())
+                .join("Fuzzy Music");
+            let service = library::Library::open(&data, &music).ok().map(|library| {
+                let service = library::LibraryService::start(
+                    library,
+                    dependencies::executable("FUZZY_YTDLP", "yt-dlp"),
+                    fuzzy_application::NetworkPolicy::detect(),
+                );
+                let startup = Arc::clone(&service);
+                std::thread::spawn(move || {
+                    let _ = startup.library.scan();
+                    let _ = startup.resume();
+                });
+                service
+            });
+            app.manage(LibraryState(service));
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
+            get_settings,
+            update_settings,
+            library_entries,
+            scan_library,
+            set_favourite,
+            retry_download,
+            play_library_track,
+            choose_music_folder,
             search_tracks,
             cancel_search,
             search_playlists,
@@ -852,12 +1043,16 @@ pub fn run() {
             if matches!(event, tauri::WindowEvent::CloseRequested { .. }) {
                 // Prevent teardown until owned children have been killed and reaped.
                 let shell = window.state::<Arc<Shell>>().inner().clone();
+                let library = window.state::<LibraryState>().0.clone();
                 if let tauri::WindowEvent::CloseRequested { api, .. } = event {
                     api.prevent_close();
                 }
                 let app = window.app_handle().clone();
                 tauri::async_runtime::spawn_blocking(move || {
                     shell.shutdown();
+                    if let Some(library) = library {
+                        library.shutdown();
+                    }
                     app.exit(0);
                 });
             }
@@ -867,6 +1062,9 @@ pub fn run() {
         .run(|app, event| {
             if matches!(event, tauri::RunEvent::Exit) {
                 app.state::<Arc<Shell>>().shutdown();
+                if let Some(library) = &app.state::<LibraryState>().0 {
+                    library.shutdown();
+                }
             }
         });
 }
@@ -1401,6 +1599,30 @@ mod tests {
                 .unwrap_err()
                 .code,
             ErrorCode::InvalidInput
+        );
+        assert!(shell.control.lock().unwrap().player.is_none());
+        shell.shutdown();
+    }
+
+    #[test]
+    fn indexed_local_playback_uses_owned_player_and_rejects_stale_commands() {
+        let fixture = Fixture::new();
+        let shell = fixture.shell();
+        let path = fixture.0.join("local.wav");
+        std::fs::write(&path, b"fixture").unwrap();
+        shell
+            .play_local(1, path.clone(), "local-1".into(), Some(32.0))
+            .unwrap();
+        let status = shell.status().unwrap();
+        assert_eq!(status.track_id.as_deref(), Some("local-1"));
+        assert_eq!(status.volume, 32.0);
+        shell.control.lock().unwrap().stop(2).unwrap();
+        assert_eq!(
+            shell
+                .play_local(1, path, "local-1".into(), Some(32.0))
+                .unwrap_err()
+                .code,
+            ErrorCode::Cancelled
         );
         assert!(shell.control.lock().unwrap().player.is_none());
         shell.shutdown();

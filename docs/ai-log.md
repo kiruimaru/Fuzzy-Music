@@ -1,5 +1,138 @@
 # AI Work Log
 
+## 2026-11-19 | Agent: Codex | Task: favourites-local-library-review-handoff
+
+### Goal
+
+Prepare the local library and player changes for review above the #22 branch.
+
+### Changed
+
+Included the PNG mascot and SoundCloud search badge, with assets for future
+YouTube and VK support. Aligned the library decision and task notes with the
+FLAC and theme implementation.
+
+### Checks
+
+53 Rust tests passed (four ignored), 31 frontend tests, eight browser fixtures,
+Clippy, rustfmt, frontend build and the agent-context smoke test passed.
+The native debug build with the PNG assets opened on Linux.
+
+### Next action
+
+Review this branch above PR #24, coordinate with #21, and verify Windows and a
+real download via the GUI before merging.
+
+## 2026-11-19 | Agent: Codex | Task: player-queue-quality-themes
+
+### Goal
+
+Move queue into the player, simplify navigation and add themes and FLAC.
+
+### Changed
+
+Moved the session queue into a player popover; removed duplicate navigation.
+Added dark/light persisted theme with schema v1-to-v2 migration, additional
+bitrate preferences and ffmpeg-backed FLAC conversion. Existing downloads are
+not rewritten; FLAC does not improve lossy source quality.
+
+### Checks
+
+53 Rust tests passed / 4 ignored, strict Clippy/rustfmt, 30 frontend and eight
+browser tests passed. Native debug build run on Linux. A real yt-dlp command
+produced FLAC verified by ffprobe; the GUI download and Windows remain untested.
+
+### Next action
+
+Restart the debug app and verify queue, theme persistence and FLAC via the UI.
+
+## 2026-11-19 | Agent: Codex | Task: launch-readme
+
+### Goal
+
+Explain how to launch and restart the desktop app for manual testing.
+
+### Changed
+
+Added Russian README instructions for dependencies, Tauri development mode,
+standalone debug builds, restarting after changes, WebKit and proxy notes.
+
+### Checks
+
+Commands were checked against package scripts and the existing shell guide;
+the native debug build was verified in the preceding session.
+
+### Next action
+
+Continue manual testing with the rebuilt app.
+
+## 2026-11-19 | Agent: Codex | Task: live-volume-adjustment
+
+### Goal
+
+Apply volume while the slider moves instead of waiting for release.
+
+### Changed
+
+Send volume changes immediately, serializing player commands and coalescing
+intermediate pending values; keep settings writes ordered.
+
+### Checks
+
+29 frontend tests, TypeScript/Vite build and eight browser fixture tests passed.
+Native audible adjustment remains for user verification.
+
+### Next action
+
+Restart the native application and confirm the slider changes sound continuously.
+
+## 2026-11-19 | Agent: Codex | Task: favourites-local-library
+
+### Goal
+
+Implement the requested SoundCloud-style transport and persistent favourites,
+download settings and an automatically indexed local music folder.
+
+### Changed
+
+- Rearranged playback controls left, expanded the timeline and added a vertical
+  hover/focus volume control. Added favourites, library and settings views.
+- Added one versioned SQLite database for favourites, audio index and settings;
+  persisted volume replaces the temporary #22 memory port.
+- Added one bounded/cancellable SoundCloud download worker, quality preferences,
+  disk staging, no-overwrite publication, error/retry, and file-preserving unlike.
+- Added startup/manual folder scanning, metadata parsing and local playback by
+  opaque index ID. The user explicitly expanded the prior no-download scope.
+- Decision 0010 and `tasks/favourites-local-library.md` describe limits and
+  overlap with #21. Work is on `feat/favourites-local-library`, based on PR #24.
+
+### Checks
+
+- Locked workspace tests: 52 passed, 4 ignored; strict Clippy/rustfmt passed.
+- Frontend: 28 tests and build passed; eight Chromium UI fixtures passed.
+- Native Tauri debug build passed; application started and its window appeared
+  on Linux. Manual playback and persistence acceptance are still outstanding.
+- Real yt-dlp downloaded one public SoundCloud track through the configured
+  proxy; ffprobe found AAC ~160 kbit/s. No universal quality promise is implied.
+- Screenshots reviewed at 1000px/320px, including the compact transport.
+
+### Decisions
+
+- Best available source format is default; lower preferences fall back without
+  transcoding. Unlike never removes the file. Local files are not exposed as paths.
+- #21 ownership overlaps; contributor review and coordination remain necessary.
+
+### Open questions
+
+- Human native listening, persistent favourite/download/folder restart scenario,
+  Windows runtime/ffmpeg availability and contributor review remain.
+- Existing source-playlist cache and HTTP lifecycle issues are not fixed here.
+
+### Next action
+
+Perform the user acceptance scenario and coordinate the dependent branch with
+the #21 contributor.
+
 ## 2026-11-19 | Agent: Codex | Task: playback-queue-22
 
 ### Goal

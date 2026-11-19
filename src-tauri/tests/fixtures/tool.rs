@@ -12,6 +12,15 @@ fn main() {
         eprintln!("token=SECRET");
         std::process::exit(1);
     }
+    let arguments: Vec<String> = std::env::args().collect();
+    if let Some(index) = arguments.iter().position(|arg| arg == "--output") {
+        let path = arguments[index + 1].replace("%(ext)s", "wav");
+        let mut wav = b"RIFF\x24\x00\x00\x00WAVEfmt \x10\x00\x00\x00\x01\x00\x01\x00\x40\x1f\x00\x00\x80\x3e\x00\x00\x02\x00\x10\x00data\x00\x00\x00\x00".to_vec();
+        wav.extend_from_slice(&[0, 0]);
+        std::fs::write(&path, wav).unwrap();
+        println!("\"{}\"", path.replace('\\', "\\\\").replace('"', "\\\""));
+        return;
+    }
     if target.starts_with("scsearch") {
         if target.contains("empty") {
             println!("{{\"entries\":[]}}");

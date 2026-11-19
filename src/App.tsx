@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { api, safeMessage, type LibraryEntry, type Playlist, type PlaylistEntry, type Track } from "./api";
+import { api, safeMessage, type ArtistTracks, type LibraryEntry, type Playlist, type PlaylistEntry, type Track } from "./api";
 import { Download, FolderOpen, Heart, ListMusic, ListPlus, RefreshCw, RotateCcw, SkipBack, SkipForward, Trash2, Volume2, X } from "lucide-react";
 import { settingsStore, validVolume, type AppSettings, type SettingsStore } from "./settings";
 import blackMascot from "./assets/black.png";
@@ -45,6 +45,19 @@ function StopIcon() {
 
 type QueueEntry = { key: number; track: Track };
 
+/// SoundCloud track URLs are one artist segment plus a track slug.
+function artistUrlOf(track: Track): string | null {
+  if (track.source !== "soundcloud") return null;
+  try {
+    const url = new URL(track.sourceUrl);
+    if (!/^(www\.)?soundcloud\.com$/.test(url.hostname)) return null;
+    const [slug] = url.pathname.split("/").filter(Boolean);
+    return slug ? `${url.origin}/${slug}` : null;
+  } catch {
+    return null;
+  }
+}
+
 export function App({ settings = settingsStore }: { settings?: SettingsStore }) {
   const [view, setView] = useState<"tracks" | "playlists" | "favourites" | "library" | "settings">("tracks");
   const [queueOpen, setQueueOpen] = useState(false);
@@ -54,6 +67,9 @@ export function App({ settings = settingsStore }: { settings?: SettingsStore }) 
   const [playlists, setPlaylists] = useState<Playlist[]>([]);
   const [openPlaylist, setOpenPlaylist] = useState<{ playlist: Playlist; skipped: number } | null>(null);
   const [playlistLoading, setPlaylistLoading] = useState(false);
+  const [openArtist, setOpenArtist] = useState<ArtistTracks | null>(null);
+  const [artistLoading, setArtistLoading] = useState(false);
+  const [artistError, setArtistError] = useState("");
   const [searchState, setSearchState] = useState("idle");
   const [searchError, setSearchError] = useState("");
   const [playback, setPlayback] = useState("idle");
@@ -61,6 +77,7 @@ export function App({ settings = settingsStore }: { settings?: SettingsStore }) 
   const [selected, setSelected] = useState<Track | null>(null);
   const searchGeneration = useRef(generationBase);
   const playlistGeneration = useRef(generationBase);
+  const artistGeneration = useRef(generationBase);
   const playbackGeneration = useRef(generationBase);
   const resolving = useRef(false);
   const [position, setPosition] = useState(0);
@@ -244,6 +261,7 @@ export function App({ settings = settingsStore }: { settings?: SettingsStore }) 
       window.clearInterval(timer);
       void api.cancelSearch(++searchGeneration.current).catch(() => {});
       void api.cancelPlaylists(++playlistGeneration.current).catch(() => {});
+      void api.cancelArtists(++artistGeneration.current).catch(() => {});
       void api.stop(++playbackGeneration.current).catch(() => {});
       void api.cancelPreparation(++prepareGeneration.current).catch(() => {});
     };
@@ -256,19 +274,25 @@ export function App({ settings = settingsStore }: { settings?: SettingsStore }) 
     setTracks([]);
     setPlaylists([]);
     setOpenPlaylist(null);
+    setOpenArtist(null);
+    setArtistError("");
     void api.cancelSearch(++searchGeneration.current).catch(() => {});
     void api.cancelPlaylists(++playlistGeneration.current).catch(() => {});
+    void api.cancelArtists(++artistGeneration.current).catch(() => {});
   }
 
   function switchView(next: typeof view) {
     setView(next);
     setOpenPlaylist(null);
+    setOpenArtist(null);
+    setArtistError("");
     setSearchState("idle");
     setSearchError("");
     setTracks([]);
     setPlaylists([]);
     void api.cancelSearch(++searchGeneration.current).catch(() => {});
     void api.cancelPlaylists(++playlistGeneration.current).catch(() => {});
+    void api.cancelArtists(++artistGeneration.current).catch(() => {});
   }
 
   async function search(event: FormEvent) {
@@ -332,6 +356,25 @@ export function App({ settings = settingsStore }: { settings?: SettingsStore }) 
       setSearchError(safeMessage(error));
     } finally {
       if (generation === playlistGeneration.current) setPlaylistLoading(false);
+    }
+  }
+
+  async function openArtistTracks(track: Track) {
+    const url = artistUrlOf(track);
+    if (!url) return;
+    const generation = ++artistGeneration.current;
+    setArtistLoading(true);
+    setArtistError("");
+    setOpenArtist(null);
+    try {
+      const response = await api.artistTracks(generation, url);
+      if (generation !== artistGeneration.current) return;
+      setOpenArtist(response);
+    } catch (error) {
+      if (generation !== artistGeneration.current) return;
+      setArtistError(safeMessage(error));
+    } finally {
+      if (generation === artistGeneration.current) setArtistLoading(false);
     }
   }
 
@@ -408,18 +451,18 @@ export function App({ settings = settingsStore }: { settings?: SettingsStore }) 
     }
   }
 
-  function playPlaylist(startIndex = 0) {
-    if (!tracks.length || !settingsReady) return;
+  function playList(list: Track[], startIndex = 0) {
+    if (!list.length || !settingsReady) return;
     ++lookaheadGeneration.current;
     lookaheadPending.current = false;
     lookaheadKey.current = "";
     playbackOrigin.current = "playlist";
-    queueRef.current = [...tracks];
+    queueRef.current = [...list];
     indexRef.current = startIndex;
-    setQueue([...tracks]);
+    setQueue([...list]);
     setQueueIndex(startIndex);
     autoAdvance.current = true;
-    void play(tracks[startIndex], true);
+    void play(list[startIndex], true);
   }
 
   function addToQueue(track: Track) {
@@ -591,6 +634,37 @@ export function App({ settings = settingsStore }: { settings?: SettingsStore }) 
     playback === "error" ? playError : "Idle";
 
   const currentSavedPlaylist = openPlaylist ? savedPlaylist(openPlaylist.playlist) : undefined;
+  const libraryEntries = library.filter(entry => view === "favourites" ? entry.favourite : entry.availableOffline || entry.track.source === "local");
+  const libraryTracks = libraryEntries.map(entry => entry.track);
+
+  function trackRows(list: Track[]) {
+    return <ul>
+      {list.map((track, index) => {
+        const current = selected?.id === track.id;
+        const liked = library.some(entry => entry.track.source === track.source && entry.track.id === track.id && entry.favourite);
+        return <li key={track.id} className={current ? "current" : undefined}>
+          <span className="row-index">{current && active ? "▰" : index + 1}</span>
+          <Artwork track={track} size="small" />
+          <div className="row-text">
+            <strong>{track.title}</strong>
+            <button className="artist-link" disabled={!artistUrlOf(track)}
+              title={`Open artist ${track.author}`} aria-label={`Open artist ${track.author}`}
+              onClick={() => void openArtistTracks(track)}>{track.author}</button>
+          </div>
+          <SourceIcon track={track} />
+          <span className="row-duration">{track.durationMs === null ? "--:--" : time(track.durationMs)}</span>
+          <button className={liked ? "row-play liked" : "row-play"}
+            title={`Favourite ${track.title}`} aria-label={`Favourite ${track.title}`} onClick={() => void toggleFavourite(track)}><Heart /></button>
+          <button className="row-play" title={`Add ${track.title} to queue`}
+            onClick={() => addToQueue(track)} aria-label={`Add ${track.title} to queue`}><ListPlus /></button>
+          <button className="row-play" disabled={!settingsReady} title={`Play ${track.title}`}
+            onClick={() => playList(list, index)} aria-label={`Play ${track.title}`}>
+            <PlayIcon />
+          </button>
+        </li>;
+      })}
+    </ul>;
+  }
 
   return <div className="app">
     <aside className="sidebar" aria-label="Navigation">
@@ -669,9 +743,9 @@ export function App({ settings = settingsStore }: { settings?: SettingsStore }) 
         <div className="library-heading"><h2>{view === "favourites" ? "Favourites" : "Music library"}</h2>
           <button className="row-play" title="Refresh music folder" aria-label="Refresh music folder" disabled={scanning} onClick={() => void scanMusic()}><RefreshCw /></button>
         </div>
-        {library.filter(entry => view === "favourites" ? entry.favourite : entry.availableOffline || entry.track.source === "local").length === 0 &&
+        {libraryEntries.length === 0 &&
           <p className="results-status">{view === "favourites" ? "No favourites yet." : "No local tracks found."}</p>}
-        <ol>{library.filter(entry => view === "favourites" ? entry.favourite : entry.availableOffline || entry.track.source === "local").map(entry =>
+        <ol>{libraryEntries.map((entry, index) =>
           <li key={entry.id}>
             <Artwork track={entry.track} size="small" />
             <div className="row-text"><strong>{entry.track.title}</strong><span>{entry.track.author} · {
@@ -682,7 +756,7 @@ export function App({ settings = settingsStore }: { settings?: SettingsStore }) 
             {entry.favourite && !entry.availableOffline && (entry.downloadState === "error" || entry.downloadState === "missing" || entry.downloadState === "none") &&
               <button className="row-play" title={`Retry ${entry.track.title}`} aria-label={`Retry ${entry.track.title}`} onClick={() => void api.retryDownload(entry.id).then(refreshLibrary).catch(() => setLibraryError("Could not retry download."))}><RefreshCw /></button>}
             <button className="row-play" title={`Add ${entry.track.title} to queue`} aria-label={`Add ${entry.track.title} to queue`} onClick={() => addToQueue(entry.track)}><ListPlus /></button>
-            <button className="row-play" title={`Play ${entry.track.title}`} aria-label={`Play ${entry.track.title}`} disabled={!settingsReady} onClick={() => void play(entry.track)}><PlayIcon /></button>
+            <button className="row-play" title={`Play ${entry.track.title}`} aria-label={`Play ${entry.track.title}`} disabled={!settingsReady} onClick={() => playList(libraryTracks, index)}><PlayIcon /></button>
             <button className={entry.favourite ? "row-play liked" : "row-play"} title={entry.favourite ? `Remove ${entry.track.title} from favourites` : `Add ${entry.track.title} to favourites`}
               aria-label={entry.favourite ? `Remove ${entry.track.title} from favourites` : `Add ${entry.track.title} to favourites`} onClick={() => void toggleFavourite(entry.track)}><Heart /></button>
           </li>)}</ol>
@@ -768,7 +842,7 @@ export function App({ settings = settingsStore }: { settings?: SettingsStore }) 
             </div>
           </div>
           <div className="playlist-actions">
-            <button className="primary" onClick={() => playPlaylist() } disabled={!tracks.length || !settingsReady}>Play playlist</button>
+            <button className="primary" onClick={() => playList(tracks) } disabled={!tracks.length || !settingsReady}>Play playlist</button>
             <button className={currentSavedPlaylist?.favourite ? "ghost small liked" : "ghost small"}
               title={currentSavedPlaylist?.favourite ? `Remove playlist ${openPlaylist.playlist.title} from favourites` : `Favourite playlist ${openPlaylist.playlist.title}`}
               aria-label={currentSavedPlaylist?.favourite ? `Remove playlist ${openPlaylist.playlist.title} from favourites` : `Favourite playlist ${openPlaylist.playlist.title}`}
@@ -784,34 +858,44 @@ export function App({ settings = settingsStore }: { settings?: SettingsStore }) 
           </div>
         </section>}
 
-      {(view === "tracks" || view === "playlists") && tracks.length > 0 &&
-        <section aria-label="Search results" className="results">
-          <div className="results-head"><span>#</span><span /><span>Title</span><span /><span>Time</span><span /><span /><span /></div>
-          <ul>
-            {tracks.map((track, index) => {
-              const current = selected?.id === track.id;
-              return <li key={track.id} className={current ? "current" : undefined}>
-                <span className="row-index">{current && active ? "▰" : index + 1}</span>
-                <Artwork track={track} size="small" />
-                <div className="row-text">
-                  <strong>{track.title}</strong>
-                  <span>{track.author}</span>
-                </div>
-                <SourceIcon track={track} />
-                <span className="row-duration">{track.durationMs === null ? "--:--" : time(track.durationMs)}</span>
-                <button className={library.some(entry => entry.track.source === track.source && entry.track.id === track.id && entry.favourite) ? "row-play liked" : "row-play"}
-                  title={`Favourite ${track.title}`} aria-label={`Favourite ${track.title}`} onClick={() => void toggleFavourite(track)}><Heart /></button>
-                <button className="row-play" title={`Add ${track.title} to queue`}
-                  onClick={() => addToQueue(track)} aria-label={`Add ${track.title} to queue`}><ListPlus /></button>
-                <button className="row-play" disabled={!settingsReady} title={`Play ${track.title}`} onClick={() => openPlaylist ? playPlaylist(index) : void play(track)} aria-label={`Play ${track.title}`}>
-                  <PlayIcon />
-                </button>
-              </li>;
-            })}
-          </ul>
+      {view === "tracks" && openArtist &&
+        <section className="playlist-header" aria-label="Artist">
+          <button className="ghost small" onClick={() => setOpenArtist(null)}>← Back to search</button>
+          <div className="playlist-hero">
+            {openArtist.artist.avatarUrl
+              ? <img className="playlist-hero-cover" src={openArtist.artist.avatarUrl} alt="" />
+              : <div className="playlist-hero-cover artwork-fallback" aria-hidden="true">♪</div>}
+            <div>
+              <p className="eyebrow">Artist</p>
+              <h2>{openArtist.artist.name}</h2>
+              <p className="playlist-by">
+                {openArtist.tracks.length} {openArtist.tracks.length === 1 ? "track" : "tracks"}
+              </p>
+            </div>
+          </div>
+          <div className="playlist-actions">
+            <button className="primary" onClick={() => playList(openArtist.tracks)} disabled={!openArtist.tracks.length || !settingsReady}>Play artist</button>
+          </div>
         </section>}
 
-      {(view === "tracks" || view === "playlists") && tracks.length === 0 && searchState === "idle" &&
+      {view === "tracks" && artistLoading && <p className="results-status">Loading artist...</p>}
+      {view === "tracks" && artistError && <p className="results-status" role="alert">{artistError}</p>}
+
+      {(view === "tracks" || view === "playlists") && !openArtist && tracks.length > 0 &&
+        <section aria-label="Search results" className="results">
+          <div className="results-head"><span>#</span><span /><span>Title</span><span /><span>Time</span><span /><span /><span /></div>
+          {trackRows(tracks)}
+        </section>}
+
+      {view === "tracks" && openArtist && openArtist.tracks.length > 0 &&
+        <section aria-label="Artist tracks" className="results">
+          <div className="results-head"><span>#</span><span /><span>Title</span><span /><span>Time</span><span /><span /><span /></div>
+          {trackRows(openArtist.tracks)}
+        </section>}
+      {view === "tracks" && openArtist && openArtist.tracks.length === 0 &&
+        <p className="results-status">No public tracks found.</p>}
+
+      {(view === "tracks" || view === "playlists") && tracks.length === 0 && searchState === "idle" && !openArtist &&
         <section className="empty-state">
           <h2>{view === "tracks" ? "Find something to play" : "Find a playlist"}</h2>
           <p>{view === "tracks"

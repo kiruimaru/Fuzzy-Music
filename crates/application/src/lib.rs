@@ -73,6 +73,30 @@ pub struct PlaylistTracksResponse {
     pub skipped_track_count: u32,
 }
 
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct Artist {
+    pub id: String,
+    pub name: String,
+    pub avatar_url: Option<String>,
+    pub track_count: Option<u32>,
+    pub source_url: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ArtistTracksRequest {
+    pub source: Source,
+    pub artist_url: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ArtistTracksResponse {
+    pub artist: Artist,
+    pub tracks: Vec<Track>,
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SearchTracksResponse {
@@ -200,6 +224,18 @@ impl From<fuzzy_soundcloud::Playlist> for Playlist {
     }
 }
 
+impl From<fuzzy_soundcloud::Artist> for Artist {
+    fn from(artist: fuzzy_soundcloud::Artist) -> Self {
+        Self {
+            id: artist.id,
+            name: artist.name,
+            avatar_url: artist.avatar_url,
+            track_count: artist.track_count,
+            source_url: artist.webpage_url,
+        }
+    }
+}
+
 pub struct Application {
     soundcloud: SoundCloudClient,
 }
@@ -305,6 +341,29 @@ impl Application {
             playlist: result.playlist.into(),
             tracks: result.tracks.into_iter().map(Track::from).collect(),
             skipped_track_count,
+        })
+    }
+
+    pub fn artist_tracks(
+        &self,
+        request: ArtistTracksRequest,
+        options: &RequestOptions,
+    ) -> Result<ArtistTracksResponse, AppError> {
+        let result = match request.source {
+            Source::Soundcloud => self
+                .soundcloud
+                .artist_tracks_with_options(&request.artist_url, options)?,
+            Source::Local => {
+                return Err(AppError {
+                    code: ErrorCode::InvalidInput,
+                    message: "Local source artists are not supported.".into(),
+                    retryable: false,
+                });
+            }
+        };
+        Ok(ArtistTracksResponse {
+            artist: result.artist.into(),
+            tracks: result.tracks.into_iter().map(Track::from).collect(),
         })
     }
 }

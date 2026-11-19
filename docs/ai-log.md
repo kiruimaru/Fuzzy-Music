@@ -771,4 +771,12 @@ the minimal Tauri shell.
 - Playlist downloads continue to never mark tracks as favourites, and a test asserts cancelled playlist tracks stay out of Favourites.
 - Verification: added a fixture-backed cancellation test (in-flight abort, queued ids skipped, no requeue, bookmark kept, no favourites).
 
+## 2026-11-19 — Artist pages and list playback
+
+- Added artist pages: a SoundCloud artist URL resolves to a user id and loads the first 50 public tracks through the web API; non-artist URLs are rejected before network access.
+- Artist names in track rows are links; the artist view reuses playlist header styling, keeps search results for Back to search and offers Play artist.
+- Playing any row now starts the visible list as the queue, so search results, artist pages, playlists, Favourites and the music library auto-advance through the existing transition machinery; the session queue keeps its semantics.
+- New commands `artist_tracks` and `cancel_artists`; new `Artist` DTO; response parsing accepts both bare-array and collection track shapes.
+- Verification: workspace tests 58 passed and 4 ignored; frontend 34 tests; clippy clean; Tauri debug build passed.
+
 

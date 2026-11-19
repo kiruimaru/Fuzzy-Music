@@ -35,6 +35,21 @@ pub struct PlaylistTracks {
     pub tracks: Vec<Track>,
 }
 
+#[derive(Debug, Serialize)]
+pub struct Artist {
+    pub id: String,
+    pub name: String,
+    pub avatar_url: Option<String>,
+    pub track_count: Option<u32>,
+    pub webpage_url: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ArtistTracks {
+    pub artist: Artist,
+    pub tracks: Vec<Track>,
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Track {
     pub id: String,
@@ -175,6 +190,24 @@ impl SoundCloudClient {
         Ok(PlaylistTracks { playlist, tracks })
     }
 
+    pub fn artist_tracks(&self, artist_url: &str) -> Result<ArtistTracks, SoundCloudError> {
+        self.artist_tracks_with_options(artist_url, &RequestOptions::default())
+    }
+
+    pub fn artist_tracks_with_options(
+        &self,
+        artist_url: &str,
+        options: &RequestOptions,
+    ) -> Result<ArtistTracks, SoundCloudError> {
+        if !is_artist_url(artist_url) {
+            return Err(SoundCloudError::InvalidInput(
+                "Expected an HTTPS SoundCloud artist URL".into(),
+            ));
+        }
+        let (artist, tracks) = web::artist(options, artist_url, self.network.as_ref())?;
+        Ok(ArtistTracks { artist, tracks })
+    }
+
     pub fn resolve_with_options(
         &self,
         track_url: &str,
@@ -288,6 +321,24 @@ fn is_soundcloud_url(url: &str) -> bool {
         && !url.chars().any(char::is_whitespace)
 }
 
+fn is_artist_url(url: &str) -> bool {
+    is_soundcloud_url(url)
+        && artist_path(url).is_some_and(|path| {
+            let path = path.trim_end_matches('/');
+            !path.is_empty()
+                && !path.contains('/')
+                && !path.contains(['?', '#'])
+                && !url.ends_with("//")
+        })
+}
+
+/// A SoundCloud artist page has exactly one path segment after the domain.
+fn artist_path(url: &str) -> Option<&str> {
+    ["https://soundcloud.com/", "https://www.soundcloud.com/"]
+        .iter()
+        .find_map(|prefix| url.strip_prefix(prefix))
+}
+
 fn parse_track(value: &Value) -> Result<Track, String> {
     let required =
         |key| optional_string(value, key).ok_or_else(|| format!("Track metadata is missing {key}"));
@@ -373,5 +424,31 @@ mod tests {
                 .to_string()
                 .contains("SoundCloud")
         );
+    }
+
+    #[test]
+    fn artist_urls_are_validated_before_network_access() {
+        let client = SoundCloudClient::new("does-not-exist");
+        for url in [
+            "https://soundcloud.com/artist/track",
+            "https://soundcloud.com/artist/sets/mix",
+            "https://soundcloud.com/",
+            "https://soundcloud.com//",
+            "https://soundcloud.com/artist?tab=tracks",
+            "http://soundcloud.com/artist",
+            "https://soundcloud.com.evil.test/artist",
+            "https://example.com/artist",
+        ] {
+            assert!(
+                matches!(
+                    client.artist_tracks(url),
+                    Err(SoundCloudError::InvalidInput(_))
+                ),
+                "{url} must be rejected"
+            );
+        }
+        assert!(is_artist_url("https://soundcloud.com/artist"));
+        assert!(is_artist_url("https://soundcloud.com/artist/"));
+        assert!(is_artist_url("https://www.soundcloud.com/artist"));
     }
 }

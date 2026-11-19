@@ -188,6 +188,24 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 .row-text strong, .row-text span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .row-text strong { font-weight: 500; }
 .row-text span { color: var(--muted); font-size: 13px; margin-top: 2px; }
+.artist-link {
+  display: block;
+  max-width: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  font-size: 13px;
+  margin-top: 2px;
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.artist-link:hover:not(:disabled) { color: var(--text); text-decoration: underline; }
+.artist-link:disabled { cursor: default; }
 .row-duration { color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums; text-align: right; }
 .source-icon { display: block; width: 20px; height: 20px; object-fit: contain; justify-self: center; }
 .row-play {

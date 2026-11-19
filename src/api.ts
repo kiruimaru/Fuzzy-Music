@@ -40,6 +40,19 @@ export type PlaylistTracks = {
   skippedTrackCount: number;
 };
 
+export type Artist = {
+  id: string;
+  name: string;
+  avatarUrl: string | null;
+  trackCount: number | null;
+  sourceUrl: string;
+};
+
+export type ArtistTracks = {
+  artist: Artist;
+  tracks: Track[];
+};
+
 export type LibraryEntry = {
   id: number;
   track: Track;
@@ -99,6 +112,11 @@ export const api = {
       generation, request: { source: playlist.source, playlistUrl: playlist.sourceUrl },
     }),
   cancelPlaylists: (generation: number) => invoke<void>("cancel_playlists", { generation }),
+  artistTracks: (generation: number, artistUrl: string) =>
+    invoke<ArtistTracks>("artist_tracks", {
+      generation, request: { source: "soundcloud", artistUrl },
+    }),
+  cancelArtists: (generation: number) => invoke<void>("cancel_artists", { generation }),
   pause: (generation: number, paused: boolean) => invoke<void>("update_playback", { generation, action: { type: "pause", paused } }),
   seek: (generation: number, positionMs: number) => invoke<void>("update_playback", { generation, action: { type: "seek", position_ms: positionMs } }),
   volume: (generation: number, volume: number) => invoke<void>("update_playback", { generation, action: { type: "volume", volume } }),

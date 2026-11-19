@@ -16,6 +16,8 @@ vi.mock("./api", async (original) => ({
     prefetch: vi.fn().mockResolvedValue(undefined),
     cancelPreparation: vi.fn().mockResolvedValue(undefined),
     playlistTracks: vi.fn(),
+    artistTracks: vi.fn(),
+    cancelArtists: vi.fn().mockResolvedValue(undefined),
     cancelPlaylists: vi.fn().mockResolvedValue(undefined),
     pause: vi.fn().mockResolvedValue(undefined), seek: vi.fn().mockResolvedValue(undefined),
     volume: vi.fn().mockResolvedValue(undefined),
@@ -56,7 +58,7 @@ afterEach(() => { cleanup(); vi.clearAllMocks(); });
 beforeEach(() => {
   vi.resetAllMocks();
   for (const method of [api.cancelSearch, api.stop, api.prepare, api.prefetch,
-    api.cancelPreparation, api.cancelPlaylists, api.pause, api.seek, api.volume]) {
+    api.cancelPreparation, api.cancelPlaylists, api.cancelArtists, api.pause, api.seek, api.volume]) {
     vi.mocked(method).mockResolvedValue(undefined);
   }
   vi.mocked(api.status).mockResolvedValue({
@@ -630,7 +632,7 @@ test("initial settings read gates Play and a failed read falls back without over
   await screen.findByText("Could not load volume settings.");
   expect((button as HTMLButtonElement).disabled).toBe(false);
   fireEvent.click(button);
-  await waitFor(() => expect(api.play).toHaveBeenCalledWith(expect.any(Number), track, { fresh: true, volume: 100 }));
+  await waitFor(() => expect(api.play).toHaveBeenCalledWith(expect.any(Number), track, { fresh: false, volume: 100 }));
   expect(settings.updateSettings).not.toHaveBeenCalled();
   expect(screen.queryByText("SECRET")).toBeNull();
 });
@@ -726,4 +728,33 @@ test("theme and FLAC preference are saved and applied", async () => {
   fireEvent.change(screen.getByLabelText("Download quality"), { target: { value: "flac" } });
   await screen.findByText(/Requires ffmpeg/);
   await waitFor(async () => expect(await settings.getSettings()).toMatchObject({ theme: "light", downloadQuality: "flac" }));
+});
+
+test("artist pages open from a track and play their list in order", async () => {
+  const second: Track = { ...track, id: "2", title: "Second", sourceUrl: "https://soundcloud.com/artist/second" };
+  vi.mocked(api.search).mockResolvedValue({ tracks: [track, second], nextPageToken: null });
+  const artist = { id: "5", name: "Artist", avatarUrl: null, trackCount: 2, sourceUrl: "https://soundcloud.com/artist" };
+  vi.mocked(api.artistTracks).mockResolvedValue({ artist, tracks: [track, second] });
+  render(<App settings={createMemorySettingsStore()} />);
+  search("music");
+  fireEvent.click((await screen.findAllByRole("button", { name: "Open artist Artist" }))[0]);
+  await waitFor(() => expect(api.artistTracks).toHaveBeenCalledWith(expect.any(Number), "https://soundcloud.com/artist"));
+  const list = await screen.findByRole("region", { name: "Artist tracks" });
+  expect(within(list).getByText("Second")).toBeTruthy();
+  fireEvent.click(within(list).getByRole("button", { name: "Play Example" }));
+  await waitFor(() => expect(api.play).toHaveBeenCalledWith(expect.any(Number), track, { fresh: false, volume: 100 }));
+  expect(screen.getByText("1 / 2")).toBeTruthy();
+  // Reaching the end of the track advances through the artist list automatically.
+  const generation = vi.mocked(api.play).mock.calls.at(-1)![0];
+  vi.mocked(api.status).mockResolvedValue({
+    generation, state: "stopped", trackId: "1", positionMs: 0, durationMs: null,
+    volume: 100, seekable: false, error: null,
+  });
+  await waitFor(() => expect(api.play).toHaveBeenCalledTimes(2), { timeout: 3000 });
+  expect(vi.mocked(api.play).mock.calls[1][1]).toEqual(second);
+  expect(screen.getByText("2 / 2")).toBeTruthy();
+  // Back returns to the search results without losing them.
+  fireEvent.click(screen.getByRole("button", { name: "← Back to search" }));
+  expect(screen.queryByRole("region", { name: "Artist tracks" })).toBeNull();
+  expect(screen.getByRole("region", { name: "Search results" })).toBeTruthy();
 });

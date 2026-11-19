@@ -1,5 +1,6 @@
 mod audio_cache;
 mod dependencies;
+mod library;
 mod playback;
 
 use fuzzy_application::{
@@ -17,6 +18,14 @@ use std::{
     },
 };
 use tauri::Manager;
+
+struct LibraryState(Option<Arc<library::LibraryService>>);
+
+impl LibraryState {
+    fn get(&self) -> Result<Arc<library::LibraryService>, AppError> {
+        self.0.clone().ok_or_else(library::storage_error)
+    }
+}
 
 /// Nearest neighbours whose audio startup segments are kept in RAM; links only
 /// are cached for the rest of the lookahead.
@@ -103,6 +112,7 @@ struct Control {
     playback: Operation,
     player: Option<playback::Player>,
     status: PlaybackStatus,
+    preferred_volume: Option<f64>,
     closed: bool,
     active: usize,
     preparation: Operation,
@@ -131,6 +141,7 @@ impl Control {
         self.status = PlaybackStatus {
             generation,
             state: "stopped",
+            volume: self.preferred_volume.unwrap_or(self.status.volume),
             ..Default::default()
         };
         Ok(())
@@ -257,7 +268,27 @@ impl Shell {
         result
     }
 
+    #[cfg(test)]
     fn play(&self, generation: u64, request: ResolveTrackRequest) -> Result<(), AppError> {
+        self.play_with_options(generation, request, false, None)
+    }
+
+    fn play_with_options(
+        &self,
+        generation: u64,
+        request: ResolveTrackRequest,
+        fresh: bool,
+        volume: Option<f64>,
+    ) -> Result<(), AppError> {
+        if let Some(volume) = volume
+            && (!volume.is_finite() || !(0.0..=100.0).contains(&volume))
+        {
+            return Err(AppError {
+                code: ErrorCode::InvalidInput,
+                message: "Volume must be between 0 and 100.".into(),
+                retryable: false,
+            });
+        }
         let track_url = request.track_url.clone();
         let (options, prepared) = {
             let mut control = self.control.lock().map_err(|_| internal())?;
@@ -266,7 +297,8 @@ impl Shell {
             }
             let options = control.playback.begin(generation)?;
             let prepared = control.prepared.take().filter(|(url, stream, when)| {
-                *url == request.track_url
+                !fresh
+                    && *url == request.track_url
                     && audio_cache::link_is_fresh(
                         &stream.stream_url,
                         *when,
@@ -283,12 +315,22 @@ impl Shell {
             let cached = control
                 .cached_streams
                 .iter()
-                .position(|(url, _, _)| *url == request.track_url)
+                .position(|(url, _, _)| !fresh && *url == request.track_url)
                 .map(|index| control.cached_streams[index].1.clone());
             control.preparation.cancellation.cancel();
+            if fresh {
+                control.lookahead.cancellation.cancel();
+                // Stop old playback before resolving a replacement. Its EOF must
+                // never play an appended successor under the new generation.
+                control.player = None;
+            }
+            if let Some(volume) = volume {
+                control.preferred_volume = Some(volume);
+            }
             control.status = PlaybackStatus {
                 generation,
                 state: "loading",
+                volume: control.preferred_volume.unwrap_or(control.status.volume),
                 ..Default::default()
             };
             control.active += 1;
@@ -318,12 +360,16 @@ impl Shell {
                     std::time::Instant::now(),
                 ));
             }
-            let playback_url = self
-                .audio_cache
-                .as_ref()
-                .and_then(|cache| cache.get(&track_url))
+            let playback_url = (!fresh)
+                .then(|| {
+                    self.audio_cache
+                        .as_ref()
+                        .and_then(|cache| cache.get(&track_url))
+                })
+                .flatten()
                 .unwrap_or_else(|| stream.stream_url.clone());
-            if let Some(cache) = &self.audio_cache
+            if !fresh
+                && let Some(cache) = &self.audio_cache
                 && cache.get(&track_url).is_none()
             {
                 let cache = Arc::clone(cache);
@@ -332,13 +378,16 @@ impl Shell {
                 let source = stream.stream_url.clone();
                 std::thread::spawn(move || cache.warm_at(&key, &source, epoch));
             }
+            let playback_volume = control.status.volume;
             if let Some(player) = control.player.as_mut() {
                 player.load(&playback_url)?;
+                player.volume(playback_volume)?;
             } else {
-                let player = playback::Player::start_with_network(
+                let player = playback::Player::start_with_volume(
                     &self.mpv,
                     &playback_url,
                     Some(&self.network),
+                    playback_volume,
                 )?;
                 control.player = Some(player);
             }
@@ -361,6 +410,59 @@ impl Shell {
         control.close();
         while control.active != 0 {
             control = self.idle.wait(control).unwrap_or_else(|e| e.into_inner());
+        }
+    }
+
+    fn play_local(
+        &self,
+        generation: u64,
+        path: PathBuf,
+        track_id: String,
+        volume: Option<f64>,
+    ) -> Result<(), AppError> {
+        if volume.is_some_and(|v| !v.is_finite() || !(0.0..=100.0).contains(&v)) {
+            return Err(AppError {
+                code: ErrorCode::InvalidInput,
+                message: "Invalid volume.".into(),
+                retryable: false,
+            });
+        }
+        let mut control = self.control.lock().map_err(|_| internal())?;
+        if control.closed {
+            return Err(cancelled());
+        }
+        control.playback.begin(generation)?;
+        control.preparation.cancellation.cancel();
+        control.lookahead.cancellation.cancel();
+        control.prepared = None;
+        control.player = None;
+        if let Some(volume) = volume {
+            control.preferred_volume = Some(volume);
+        }
+        let playback_volume = control.preferred_volume.unwrap_or(control.status.volume);
+        control.status = PlaybackStatus {
+            generation,
+            state: "loading",
+            track_id: Some(track_id),
+            volume: playback_volume,
+            ..Default::default()
+        };
+        let result = playback::Player::start_with_volume(
+            &self.mpv,
+            path.to_str().ok_or_else(internal)?,
+            Some(&self.network),
+            playback_volume,
+        );
+        match result {
+            Ok(player) => {
+                control.player = Some(player);
+                Ok(())
+            }
+            Err(error) => {
+                control.status.state = "error";
+                control.status.error = Some(error.message.clone());
+                Err(error)
+            }
         }
     }
 
@@ -391,6 +493,103 @@ impl Shell {
         }
         Ok(control.status.clone())
     }
+}
+
+#[tauri::command]
+async fn get_settings(
+    library: tauri::State<'_, LibraryState>,
+) -> Result<library::AppSettings, AppError> {
+    let library = library.get()?;
+    worker(move || library.library.settings()).await
+}
+
+#[tauri::command]
+async fn update_settings(
+    library: tauri::State<'_, LibraryState>,
+    settings: library::SettingsPatch,
+) -> Result<library::AppSettings, AppError> {
+    let library = library.get()?;
+    worker(move || library.library.update_settings(settings)).await
+}
+
+#[tauri::command]
+async fn library_entries(
+    library: tauri::State<'_, LibraryState>,
+) -> Result<Vec<library::LibraryEntry>, AppError> {
+    let library = library.get()?;
+    worker(move || library.library.entries()).await
+}
+
+#[tauri::command]
+async fn scan_library(
+    library: tauri::State<'_, LibraryState>,
+) -> Result<library::ScanResult, AppError> {
+    let library = library.get()?;
+    worker(move || library.library.scan()).await
+}
+
+#[tauri::command]
+async fn set_favourite(
+    library: tauri::State<'_, LibraryState>,
+    track: fuzzy_application::Track,
+    liked: bool,
+) -> Result<(), AppError> {
+    let library = library.get()?;
+    worker(move || library.set_favourite(track, liked)).await
+}
+
+#[tauri::command]
+async fn retry_download(library: tauri::State<'_, LibraryState>, id: i64) -> Result<(), AppError> {
+    let library = library.get()?;
+    worker(move || library.enqueue(id)).await
+}
+
+#[tauri::command]
+async fn play_library_track(
+    shell: tauri::State<'_, Arc<Shell>>,
+    library: tauri::State<'_, LibraryState>,
+    generation: u64,
+    id: i64,
+    volume: Option<f64>,
+) -> Result<(), AppError> {
+    let shell = shell.inner().clone();
+    let library = library.get()?;
+    worker(move || {
+        let result = library
+            .library
+            .entry(id)
+            .and_then(|entry| library.library.path(id).map(|path| (entry, path)));
+        match result {
+            Ok((entry, path)) => shell.play_local(generation, path, entry.track.id, volume),
+            Err(error) => {
+                // Invalid or missing audio is still a new playback intent.
+                shell
+                    .control
+                    .lock()
+                    .map_err(|_| internal())?
+                    .stop(generation)?;
+                Err(error)
+            }
+        }
+    })
+    .await
+}
+
+#[tauri::command]
+async fn choose_music_folder(app: tauri::AppHandle) -> Result<Option<String>, AppError> {
+    use tauri_plugin_dialog::DialogExt;
+    worker(move || {
+        app.dialog()
+            .file()
+            .blocking_pick_folder()
+            .map(|path| {
+                path.into_path()
+                    .map_err(|_| library::storage_error())
+                    .map(|path| path.to_string_lossy().into_owned())
+            })
+            .transpose()
+    })
+    .await
 }
 
 impl Shell {
@@ -698,11 +897,13 @@ async fn play_track(
     shell: tauri::State<'_, Arc<Shell>>,
     generation: u64,
     request: ResolveTrackRequest,
+    fresh: Option<bool>,
+    volume: Option<f64>,
 ) -> Result<(), AppError> {
     let shell = shell.inner().clone();
     worker(move || {
         let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            shell.play(generation, request)
+            shell.play_with_options(generation, request, fresh.unwrap_or(false), volume)
         }))
         .unwrap_or_else(|_| Err(internal()));
         if let Err(error) = &result
@@ -771,7 +972,9 @@ impl Shell {
                         retryable: false,
                     });
                 }
-                player.volume(volume)
+                player.volume(volume)?;
+                control.preferred_volume = Some(volume);
+                Ok(())
             }
         }
     }
@@ -789,8 +992,40 @@ async fn update_playback(
 
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
         .manage(Arc::new(Shell::new()))
+        .setup(|app| {
+            let data = app.path().app_data_dir()?;
+            let music = app
+                .path()
+                .audio_dir()
+                .unwrap_or_else(|_| data.clone())
+                .join("Fuzzy Music");
+            let service = library::Library::open(&data, &music).ok().map(|library| {
+                let service = library::LibraryService::start(
+                    library,
+                    dependencies::executable("FUZZY_YTDLP", "yt-dlp"),
+                    fuzzy_application::NetworkPolicy::detect(),
+                );
+                let startup = Arc::clone(&service);
+                std::thread::spawn(move || {
+                    let _ = startup.library.scan();
+                    let _ = startup.resume();
+                });
+                service
+            });
+            app.manage(LibraryState(service));
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
+            get_settings,
+            update_settings,
+            library_entries,
+            scan_library,
+            set_favourite,
+            retry_download,
+            play_library_track,
+            choose_music_folder,
             search_tracks,
             cancel_search,
             search_playlists,
@@ -808,12 +1043,16 @@ pub fn run() {
             if matches!(event, tauri::WindowEvent::CloseRequested { .. }) {
                 // Prevent teardown until owned children have been killed and reaped.
                 let shell = window.state::<Arc<Shell>>().inner().clone();
+                let library = window.state::<LibraryState>().0.clone();
                 if let tauri::WindowEvent::CloseRequested { api, .. } = event {
                     api.prevent_close();
                 }
                 let app = window.app_handle().clone();
                 tauri::async_runtime::spawn_blocking(move || {
                     shell.shutdown();
+                    if let Some(library) = library {
+                        library.shutdown();
+                    }
                     app.exit(0);
                 });
             }
@@ -823,6 +1062,9 @@ pub fn run() {
         .run(|app, event| {
             if matches!(event, tauri::RunEvent::Exit) {
                 app.state::<Arc<Shell>>().shutdown();
+                if let Some(library) = &app.state::<LibraryState>().0 {
+                    library.shutdown();
+                }
             }
         });
 }
@@ -1271,6 +1513,113 @@ mod tests {
         assert_eq!(
             shell
                 .update_playback(1, PlaybackAction::Pause { paused: false })
+                .unwrap_err()
+                .code,
+            ErrorCode::Cancelled
+        );
+        assert!(shell.control.lock().unwrap().player.is_none());
+        shell.shutdown();
+    }
+
+    #[test]
+    fn session_selection_resolves_fresh_instead_of_using_a_cached_link() {
+        let fixture = Fixture::new();
+        let mut shell = fixture.shell();
+        shell.play(1, request("ok")).unwrap();
+        assert!(!shell.control.lock().unwrap().cached_streams.is_empty());
+        Arc::get_mut(&mut shell).unwrap().application =
+            Application::new(SoundCloudClient::new(fixture.0.join("missing-extractor")));
+        // The source playlist fast path can still reuse its previously resolved link.
+        shell.play(2, request("ok")).unwrap();
+        let error = shell
+            .play_with_options(3, request("ok"), true, Some(25.0))
+            .unwrap_err();
+        assert_eq!(error.code, ErrorCode::SourceUnavailable);
+        assert_eq!(shell.status().unwrap().state, "error");
+        assert!(shell.control.lock().unwrap().player.is_none());
+        shell.shutdown();
+    }
+
+    #[test]
+    fn fresh_replacement_stops_old_player_before_resolve_and_stop_cancels_it() {
+        let fixture = Fixture::new();
+        let shell = fixture.shell();
+        shell.play(1, request("ok")).unwrap();
+        shell.prepare(1, 1, request("next")).unwrap();
+        let resolving = {
+            let shell = Arc::clone(&shell);
+            std::thread::spawn(move || {
+                shell.play_with_options(2, request("slow"), true, Some(35.0))
+            })
+        };
+        wait_active(&shell);
+        {
+            let mut control = shell.control.lock().unwrap();
+            assert!(control.player.is_none());
+            assert!(control.prepared.is_none());
+            assert_eq!(control.status.generation, 2);
+            assert_eq!(control.status.volume, 35.0);
+            control.stop(3).unwrap();
+        }
+        assert_eq!(
+            resolving.join().unwrap().unwrap_err().code,
+            ErrorCode::Cancelled
+        );
+        let status = shell.status().unwrap();
+        assert_eq!(status.state, "stopped");
+        assert_eq!(status.volume, 35.0);
+        assert!(shell.control.lock().unwrap().player.is_none());
+        shell.shutdown();
+    }
+
+    #[test]
+    fn preferred_volume_survives_stop_and_is_used_for_new_players() {
+        let fixture = Fixture::new();
+        let shell = fixture.shell();
+        for (generation, volume) in [(1, 25.0), (3, 0.0)] {
+            shell
+                .play_with_options(generation, request("ok"), true, Some(volume))
+                .unwrap();
+            assert_eq!(shell.status().unwrap().volume, volume);
+            shell.control.lock().unwrap().stop(generation + 1).unwrap();
+            assert_eq!(shell.status().unwrap().volume, volume);
+        }
+        shell
+            .play_with_options(5, request("ok"), true, None)
+            .unwrap();
+        shell
+            .update_playback(5, PlaybackAction::Volume { volume: 15.0 })
+            .unwrap();
+        // Stop can arrive before the next property poll acknowledges the volume.
+        shell.control.lock().unwrap().stop(6).unwrap();
+        assert_eq!(shell.status().unwrap().volume, 15.0);
+        assert_eq!(
+            shell
+                .play_with_options(7, request("ok"), true, Some(f64::NAN))
+                .unwrap_err()
+                .code,
+            ErrorCode::InvalidInput
+        );
+        assert!(shell.control.lock().unwrap().player.is_none());
+        shell.shutdown();
+    }
+
+    #[test]
+    fn indexed_local_playback_uses_owned_player_and_rejects_stale_commands() {
+        let fixture = Fixture::new();
+        let shell = fixture.shell();
+        let path = fixture.0.join("local.wav");
+        std::fs::write(&path, b"fixture").unwrap();
+        shell
+            .play_local(1, path.clone(), "local-1".into(), Some(32.0))
+            .unwrap();
+        let status = shell.status().unwrap();
+        assert_eq!(status.track_id.as_deref(), Some("local-1"));
+        assert_eq!(status.volume, 32.0);
+        shell.control.lock().unwrap().stop(2).unwrap();
+        assert_eq!(
+            shell
+                .play_local(1, path, "local-1".into(), Some(32.0))
                 .unwrap_err()
                 .code,
             ErrorCode::Cancelled

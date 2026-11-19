@@ -9,6 +9,8 @@ for (const viewport of [{ width: 1000, height: 720 }, { width: 320, height: 640 
       Object.assign(window, {
         __TAURI_INTERNALS__: {
           invoke: async (command: string, args: { generation: number; action: { type: string; paused: boolean; volume: number; position_ms: number } }) => {
+            if (command === "get_settings" || command === "update_settings") return { volume: 100, downloadQuality: "best", musicFolder: "/music" };
+            if (command === "library_entries") return [];
             if (command === "search_tracks") return {
               tracks: [{
                 id: "1", title: "A very long track title with Supercalifragilisticexpialidocious",
@@ -66,8 +68,10 @@ for (const viewport of [{ width: 1000, height: 720 }, { width: 320, height: 640 
     await expect(page.getByText("Paused", { exact: true })).toBeVisible();
     await page.getByRole("button", { name: "Resume", exact: true }).click();
     await expect(page.getByText("Playing", { exact: true })).toBeVisible();
-    await page.getByLabel("Volume").fill("40");
-    await page.getByLabel("Volume").press("ArrowRight");
+    await page.getByRole("button", { name: "Volume controls" }).hover();
+    await expect(page.getByLabel("Volume", { exact: true })).toBeVisible();
+    await page.getByLabel("Volume", { exact: true }).fill("40");
+    await page.getByLabel("Volume", { exact: true }).press("ArrowRight");
     await expect(page.locator(".volume output")).toHaveText("41%");
     await page.getByLabel("Position").fill("30000");
     await page.getByLabel("Position").press("ArrowRight");
@@ -93,6 +97,8 @@ test("playlist search and open at 1000px with fixture IPC", async ({ page }) => 
     Object.assign(window, {
       __TAURI_INTERNALS__: {
         invoke: async (command: string) => {
+          if (command === "get_settings") return { volume: 100, downloadQuality: "best", musicFolder: "/music" };
+          if (command === "library_entries") return [];
           if (command === "search_playlists") return { playlists: [playlist], nextPageToken: null };
           if (command === "playlist_tracks") return {
             playlist,
@@ -140,6 +146,8 @@ test("player bar stays visible with a long playlist", async ({ page }) => {
     Object.assign(window, {
       __TAURI_INTERNALS__: {
         invoke: async (command: string) => {
+          if (command === "get_settings") return { volume: 100, downloadQuality: "best", musicFolder: "/music" };
+          if (command === "library_entries") return [];
           if (command === "search_playlists") return { playlists: [playlist], nextPageToken: null };
           if (command === "playlist_tracks") return { playlist, tracks, skippedTrackCount: 0 };
           if (command === "playback_status") return {
@@ -179,3 +187,133 @@ test("player bar stays visible with a long playlist", async ({ page }) => {
   await expect(page.getByRole("button", { name: "Stop" })).toBeVisible();
   await page.screenshot({ path: "test-results/long-playlist-1000.png" });
 });
+
+for (const width of [1000, 320]) {
+  test(`editable session queue, EOF and removal at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 720 });
+    await page.addInitScript(() => {
+      const tracks = Array.from({ length: 3 }, (_, index) => ({
+        id: String(index + 1), title: `Queue track ${index + 1}`, author: "Example artist",
+        artworkUrl: null, durationMs: 180000, streamUrl: null, source: "soundcloud",
+        sourceUrl: `https://soundcloud.com/a/t${index + 1}`,
+      }));
+      let status = {
+        generation: 0, state: "idle", trackId: null as string | null, error: null,
+        positionMs: 0, durationMs: 180000, volume: 100, seekable: true,
+      };
+      window.addEventListener("fixture-eof", () => { status.state = "stopped"; });
+      Object.assign(window, { __TAURI_INTERNALS__: {
+        invoke: async (command: string, args: {
+          generation: number; request: { trackUrl: string }; volume: number; fresh: boolean;
+          action: { type: string; volume: number; paused: boolean; position_ms: number };
+        }) => {
+          if (command === "get_settings") return { volume: 100, downloadQuality: "best", musicFolder: "/music" };
+          if (command === "library_entries") return [];
+          if (command === "search_tracks") return { tracks, nextPageToken: null };
+          if (command === "play_track") {
+            if (!args.fresh) throw new Error("Session tracks must resolve fresh");
+            status = {
+              ...status, generation: args.generation, state: "playing", volume: args.volume,
+              trackId: tracks.find(track => track.sourceUrl === args.request.trackUrl)!.id,
+            };
+          }
+          if (command === "stop_playback") status = { ...status, generation: args.generation, state: "stopped" };
+          if (command === "playback_status") return { ...status };
+          if (command === "update_playback") {
+            if (args.action.type === "pause") status.state = args.action.paused ? "paused" : "playing";
+            if (args.action.type === "volume") status.volume = args.action.volume;
+            if (args.action.type === "seek") status.positionMs = args.action.position_ms;
+          }
+        },
+      } });
+    });
+    await page.goto("/");
+    await page.getByLabel("Track or artist").fill("queue");
+    await page.getByRole("button", { name: "Search", exact: true }).click();
+    for (let index = 1; index <= 3; index++) {
+      await page.getByRole("button", { name: `Add Queue track ${index} to queue`, exact: true }).click();
+    }
+    await page.getByRole("button", { name: "Queue", exact: true }).click();
+    const list = page.getByRole("region", { name: "Session queue" });
+    await expect(list.getByRole("listitem")).toHaveCount(3);
+    await list.getByRole("button", { name: "Play queued Queue track 1", exact: true }).click();
+    await expect(page.getByText("Playing", { exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Previous track" })).toBeDisabled();
+    await page.evaluate(() => window.dispatchEvent(new Event("fixture-eof")));
+    await expect(page.getByText("2 / 3", { exact: true })).toBeVisible();
+    await list.getByRole("button", { name: "Remove Queue track 1 from queue", exact: true }).click();
+    await expect(page.getByText("1 / 2", { exact: true })).toBeVisible();
+    await expect(list.locator('[aria-current="true"]')).toContainText("Queue track 2");
+    await expect(page.getByText("Playing", { exact: true })).toBeVisible();
+    await page.screenshot({ path: `test-results/queue-${width}.png` });
+    await list.getByRole("button", { name: "Remove Queue track 2 from queue", exact: true }).click();
+    await expect(page.getByText("Stopped", { exact: true })).toBeVisible();
+    await expect(page.getByText("No track selected", { exact: true })).toBeVisible();
+    await expect(list.getByRole("listitem")).toHaveCount(1);
+    await expect.poll(() => page.evaluate(() =>
+      document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    const playerBox = await page.getByRole("contentinfo", { name: "Playback" }).boundingBox();
+    expect(playerBox!.y + playerBox!.height).toBeLessThanOrEqual(721);
+    await list.getByRole("button", { name: "Play queued Queue track 3", exact: true }).click();
+    await expect(page.getByText("Playing", { exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Next track" })).toBeDisabled();
+    await page.evaluate(() => window.dispatchEvent(new Event("fixture-eof")));
+    await expect(page.getByText("Stopped", { exact: true })).toBeVisible();
+    await expect(page.getByText("1 / 1", { exact: true })).toBeVisible();
+  });
+}
+
+for (const width of [1000, 320]) {
+  test(`favourites, folder settings and volume popover at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 720 });
+    await page.addInitScript(() => {
+      const track = { id: "1", title: "Offline song", author: "Artist", artworkUrl: null,
+        durationMs: 180000, streamUrl: null, source: "soundcloud", sourceUrl: "https://soundcloud.com/a/b" };
+      let settings = { volume: 60, downloadQuality: "best", musicFolder: "/music" };
+      let liked = false;
+      let status = { generation: 0, state: "idle", trackId: null as string | null, error: null,
+        positionMs: 0, durationMs: 180000, volume: 60, seekable: true };
+      Object.assign(window, { __TAURI_INTERNALS__: {
+        invoke: async (command: string, args: {
+          generation: number; id: number; volume: number; liked: boolean;
+          settings: Partial<typeof settings>;
+        }) => {
+          if (command === "get_settings") return { ...settings };
+          if (command === "update_settings") return settings = { ...settings, ...args.settings };
+          if (command === "search_tracks") return { tracks: [track], nextPageToken: null };
+          if (command === "set_favourite") { liked = args.liked; return; }
+          if (command === "library_entries") return liked ? [{ id: 7, track, favourite: true, downloadState: "ready", error: null, availableOffline: true }] : [];
+          if (command === "choose_music_folder") return "/new music";
+          if (command === "scan_library") return { imported: 0, skipped: 0, truncated: false };
+          if (command === "play_library_track") status = { ...status, generation: args.generation, state: "playing", trackId: "1", volume: args.volume };
+          if (command === "playback_status") return status;
+          if (command === "stop_playback") status = { ...status, generation: args.generation, state: "stopped" };
+        },
+      } });
+    });
+    await page.goto("/");
+    await page.getByLabel("Track or artist").fill("music");
+    await page.getByRole("button", { name: "Search", exact: true }).click();
+    await page.getByRole("button", { name: "Favourite Offline song" }).click();
+    await page.getByRole("button", { name: "Favourites", exact: true }).click();
+    const favourites = page.getByRole("region", { name: "Favourite tracks" });
+    await expect(favourites.getByText("Available offline", { exact: false })).toBeVisible();
+    await favourites.getByRole("button", { name: "Play Offline song" }).click();
+    await expect(page.getByText("Playing", { exact: true })).toBeVisible();
+    await page.getByRole("button", { name: "Volume controls" }).hover();
+    await expect(page.getByRole("slider", { name: "Volume" })).toBeVisible();
+    const popover = await page.locator(".volume-popup").boundingBox();
+    expect(popover!.height).toBeGreaterThan(popover!.width);
+    expect(popover!.x).toBeGreaterThanOrEqual(0);
+    expect(popover!.x + popover!.width).toBeLessThanOrEqual(width);
+    await page.screenshot({ path: `test-results/library-${width}.png` });
+    await page.getByRole("button", { name: "Settings", exact: true }).click();
+    await page.getByLabel("Download quality").selectOption("flac");
+    await expect(page.getByText(/Requires ffmpeg/)).toBeVisible();
+    await page.getByLabel("Theme").selectOption("light");
+    await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
+    await page.getByRole("button", { name: "Choose music folder" }).click();
+    await expect(page.getByText("/new music")).toBeVisible();
+    await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  });
+}

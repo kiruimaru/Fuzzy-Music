@@ -34,7 +34,7 @@ type Track = {
   artworkUrl: string | null;
   durationMs: number | null;
   streamUrl: string | null;
-  source: "soundcloud";
+  source: "soundcloud" | "local";
   sourceUrl: string;
 };
 ```
@@ -42,7 +42,7 @@ type Track = {
 `id` is stable for the source. `durationMs` and `streamUrl` may be null when
 the source does not provide them yet. The UI must not construct source URLs.
 
-`sourceUrl` is the public source permalink supplied by the adapter. This is an
+For SoundCloud, `sourceUrl` is the public source permalink supplied by the adapter. This is an
 explicit extension to the initial contract: source ID alone cannot be resolved
 by the existing adapter. Pass it unchanged to resolve; it is not an audio URL.
 Missing or whitespace-only author becomes `Unknown artist`; present author is
@@ -50,6 +50,8 @@ preserved. Duration is rounded to nearest millisecond; absent, negative,
 nonfinite, or greater than JavaScript's safe integer range becomes null.
 Search and resolved metadata always have `streamUrl: null`; audio URLs live
 only in the separate resolve response. Do not persist temporary audio URLs.
+Local tracks have opaque `id` and `sourceUrl: "local:<id>"`; their filesystem
+paths stay in Rust. They are played only through `play_library_track`.
 
 ## Search
 
@@ -160,7 +162,7 @@ The minimal shell commands are:
 ```ts
 search_tracks({ generation, request: SearchTracksRequest }): Promise<SearchTracksResponse>
 cancel_search({ generation }): Promise<void>
-play_track({ generation, request: ResolveTrackRequest }): Promise<void>
+play_track({ generation, request: ResolveTrackRequest, fresh?: boolean, volume?: number }): Promise<void>
 stop_playback({ generation }): Promise<void>
 playback_status(): Promise<{
   generation: number;
@@ -200,7 +202,10 @@ Seek requires known duration and seekability; position is clamped to duration.
 The action's `position_ms` field is explicitly snake_case on this IPC command;
 status fields remain camelCase. Successful command submission is not an
 optimistic state change: observed mpv properties drive the next snapshot.
-Volume is not persisted and currently resets to 100 on a new Play.
+Volume must be finite and within 0..100. `play_track` accepts the preferred
+volume and passes it to mpv at process startup; omitted volume uses the last
+snapshot volume (100 initially). Stop preserves volume. Volume is saved through
+the SQLite settings port.
 
 ```ts
 type PlaybackState =
@@ -212,18 +217,97 @@ type PlaybackState =
   | "error";
 
 type PlaybackSnapshot = {
+  generation: number;
   state: PlaybackState;
   trackId: string | null;
   positionMs: number;
   durationMs: number | null;
   volume: number;
+  seekable: boolean;
   error: string | null;
+  transitions: number;
 };
 ```
 
 Playback commands should be small and explicit: load a track, play, pause,
 seek, set volume, and stop. The UI consumes snapshots/events and does not
 manage the mpv process directly.
+
+## Session queue
+
+The frontend owns a temporary ordered sequence of `{ key, track: Track }`
+entries; duplicate Tracks have different entry keys. No queue or source-specific
+response shape crosses IPC. Add appends without playing; Play on a track-search
+result appends and selects. Search and browsing do not clear the queue.
+Selection and Previous/Next have no wraparound. Stop preserves list/selection.
+Deleting the current entry stops/cancels playback and clears selection; another
+entry must be selected explicitly. Removing another entry preserves playback.
+
+Session queue play commands set `fresh: true`: each new track resolves at launch,
+ignoring prepared/cached stream links and HLS audio. Rust stops the old player
+before resolving the replacement, cancels old preparation/lookahead, and rejects
+late work through playback generations. No audio warmers are spawned in this
+mode. EOF selects the next entry once, or remains stopped after the last.
+An error disables automatic advancement and does not retry/skip without user
+action. Existing public playlist playback keeps its own prepared transition
+sequence; adding to the session queue does not edit that source sequence.
+See decision 0009.
+
+## Settings Port For #21
+
+The following TypeScript contract is implemented by an injectable frontend port:
+
+```ts
+type AppSettings = {
+  volume: number;
+  downloadQuality: "best" | "high" | "medium" | "standard" | "small" | "flac";
+  musicFolder: string;
+  theme: "dark" | "light";
+};
+interface SettingsStore {
+  getSettings(): Promise<AppSettings>;
+  updateSettings(settings: Partial<AppSettings>): Promise<AppSettings>;
+}
+```
+
+Default volume is 100; values must be finite within 0..100. Updates return the
+committed settings; updates patch only supplied fields. Tauri mapping:
+`get_settings(): Promise<AppSettings>` and
+`update_settings({ settings: AppSettings }): Promise<AppSettings>`.
+These commands use one versioned SQLite database in the Tauri application data
+directory. UI waits for its initial read before Play, serializes volume writes,
+shows safe load/save failures, and falls back to 100 on read failure without
+writing over stored data. Contributor review/coordination with #21 remains.
+No temporary stream URL belongs in settings.
+
+## Favourites And Local Library
+
+`library_entries()` returns typed entries containing stable Track metadata,
+favourite state, download status and offline availability; filesystem paths
+are not sent to the UI. `set_favourite({track, liked})` persists a like and
+enqueues a SoundCloud download. `retry_download({id})` retries a failed or
+missing file. `scan_library()` imports supported local audio from the configured
+folder. `play_library_track({generation,id,volume})` opens only an indexed file
+and uses the existing playback generation/owned mpv lifecycle.
+
+`choose_music_folder()` opens the native folder chooser; `update_settings`
+requires an existing absolute writable directory. A startup scan imports
+supported files using embedded title/artist/duration metadata where available;
+a manual refresh detects files added later. Scan does not follow symlinks, is
+bounded to 20,000 entries and 16 directory levels, and reports unreadable items.
+Changing folders does not move or delete existing indexed files.
+
+One background worker queues at most 64 downloads and applies the source's
+best available audio by default. High/medium/standard/small prefer source
+formats at or below 320/192/128/64 kbit/s respectively, falling back to the
+best available audio if none matches. FLAC converts the best available audio
+with ffmpeg; it cannot recover quality lost at the source and may require
+substantially more temporary disk space. Output size is checked after conversion.
+Changing the preference does not replace existing downloads. Downloads have a 10-minute
+deadline and 512 MiB file limit, use disk staging and atomic no-overwrite
+publication. Removing a like cancels pending work but never deletes user files.
+Like and failure persist independently; retry is explicit. Temporary signed
+links are neither persisted nor exposed to the interface. See decision 0010.
 
 ## Error shape
 

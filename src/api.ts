@@ -7,7 +7,7 @@ export type Track = {
   artworkUrl: string | null;
   durationMs: number | null;
   streamUrl: string | null;
-  source: "soundcloud";
+  source: "soundcloud" | "local";
   sourceUrl: string;
 };
 
@@ -40,15 +40,32 @@ export type PlaylistTracks = {
   skippedTrackCount: number;
 };
 
+export type LibraryEntry = {
+  id: number;
+  track: Track;
+  favourite: boolean;
+  downloadState: "none" | "pending" | "downloading" | "ready" | "error" | "missing";
+  error: string | null;
+  availableOffline: boolean;
+};
+
 export const api = {
+  library: () => invoke<LibraryEntry[]>("library_entries"),
+  scanLibrary: () => invoke<{ imported: number; skipped: number; truncated: boolean }>("scan_library"),
+  favourite: (track: Track, liked: boolean) => invoke<void>("set_favourite", { track, liked }),
+  retryDownload: (id: number) => invoke<void>("retry_download", { id }),
+  chooseFolder: () => invoke<string | null>("choose_music_folder"),
+  playLibrary: (generation: number, id: number, volume: number) =>
+    invoke<void>("play_library_track", { generation, id, volume }),
   search: (generation: number, query: string) =>
     invoke<{ tracks: Track[]; nextPageToken: string | null }>("search_tracks", {
       generation, request: { query, limit: 30 },
     }),
   cancelSearch: (generation: number) => invoke<void>("cancel_search", { generation }),
-  play: (generation: number, track: Track) =>
+  play: (generation: number, track: Track, options?: { fresh?: boolean; volume?: number }) =>
     invoke<void>("play_track", {
       generation, request: { source: track.source, trackUrl: track.sourceUrl },
+      ...options,
     }),
   stop: (generation: number) => invoke<void>("stop_playback", { generation }),
   prepare: (generation: number, track: Track, playbackGeneration: number) => invoke<void>("prepare_track", {

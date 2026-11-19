@@ -11,7 +11,20 @@ See [desktop setup and verification](docs/shell-development.md).
 The player supports pause/resume, position/seek and volume through mpv JSON IPC. See
 [`tasks/playback-controls.md`](tasks/playback-controls.md) for verification and
 remaining limitations. Playlist playback supports previous/next and automatic
-transitions; independent queue editing and persistence remain unfinished.
+transitions. A separate session queue supports adding search results, selecting
+and removing entries, Previous/Next and automatic advancement without repeat.
+Removing the current entry stops playback and leaves the next choice to the user.
+Queue persistence is outside the MVP. Favourites, volume, download quality and
+the music-folder setting are stored locally.
+
+Liking a SoundCloud track queues one disk download, using the best available
+source audio by default. Settings offer lower bitrate preferences and a folder
+chooser. Download failures remain visible and can be retried. The application
+indexes supported audio in that folder at startup and can play it offline.
+Removing a favourite never deletes its downloaded file. Download only tracks
+you have permission to keep; available formats depend on the source.
+FLAC conversion requires `ffmpeg` on PATH and cannot recover quality lost in
+the source stream. Changing quality affects future downloads only.
 
 A dark Spotify-style shell also adds public SoundCloud **playlist search**:
 search playlists, open one and play its tracks through the same player. It uses
@@ -20,6 +33,8 @@ cannot search playlists. See decision 0006 and
 [`tasks/playlist-search.md`](tasks/playlist-search.md). Saved playlists are not
 implemented. Integration checks and accepted review follow-ups are recorded in
 [`tasks/pr20-pr23-integration.md`](tasks/pr20-pr23-integration.md).
+Session queue behavior and #22 acceptance are recorded in
+[`tasks/playback-queue-22.md`](tasks/playback-queue-22.md).
 
 ## Project goals
 
@@ -29,7 +44,8 @@ implemented. Integration checks and accepted review follow-ups are recorded in
 - Manage a playback queue and switch tracks.
 - Store local favourites and application settings.
 
-Saved/custom playlists, history, and additional themes are post-MVP work.
+Saved/custom playlists and history are post-MVP work. Dark and light themes
+are available in settings.
 
 ## Architecture and stack
 
@@ -45,7 +61,7 @@ first release:
 | Tauri 2 | Typed commands between interface and Rust | Search, playlists and playback controls implemented |
 | React, TypeScript, CSS | Search and minimal playback interface | Implemented |
 | mpv | Audio playback | Play/Stop, pause, seek, volume and playlist transitions implemented |
-| SQLite | Local favourites and settings | Planned |
+| SQLite | Local favourites, library index and settings | Implemented |
 
 SoundCloud-specific code is isolated in `crates/soundcloud`. The planned
 frontend/Rust boundary uses explicit, source-agnostic contracts in
@@ -72,7 +88,68 @@ Team responsibilities are recorded in
 - `.github`: issue/PR templates and Windows alpha build/artifact workflow.
 
 Keep Tauri commands above `crates/application`; the frontend must use
-the documented DTOs. Persistence and the full playback API remain planned.
+the documented DTOs. Settings, favourites and the local library use persistent
+storage; see the contracts for the current playback API.
+
+## Как запустить приложение
+
+Откройте терминал в папке репозитория Fuzzy Music. Для запуска из исходного
+кода нужны Node.js с npm, Rust/Cargo, а также `mpv` и `yt-dlp`. В Linux
+понадобятся системные библиотеки Tauri; список пакетов для Linux и Windows
+приведён в [инструкции по настройке](docs/shell-development.md).
+
+При первом запуске установите зависимости проекта:
+
+```bash
+npm ci
+```
+
+Затем запустите настольное приложение:
+
+```bash
+npm run tauri -- dev
+```
+
+Первый запуск может занять несколько минут из-за сборки Rust. Оставьте терминал
+открытым, пока пользуетесь приложением; для остановки закройте окно или нажмите
+`Ctrl+C` в терминале. Команда `npm run dev` отдельно запускает только интерфейс
+в браузере, без настоящего поиска и воспроизведения.
+
+На Linux с Hyprland, если окно не отображается или возникают ошибки WebKit,
+попробуйте запуск с локальным параметром:
+
+```bash
+WEBKIT_DISABLE_DMABUF_RENDERER=1 npm run tauri -- dev
+```
+
+### Отдельная сборка для тестирования
+
+Чтобы запускать приложение без сервера разработки, соберите debug-версию:
+
+```bash
+npm run tauri -- build --debug --no-bundle
+```
+
+После сборки откройте её из папки репозитория:
+
+```bash
+./target/debug/fuzzy-shell
+```
+
+На Windows в PowerShell используйте `.\target\debug\fuzzy-shell.exe`. Для
+Linux с указанной выше проблемой WebKit перед командой запуска можно добавить
+`WEBKIT_DISABLE_DMABUF_RENDERER=1`. Это сборка для тестирования, а не готовый
+установщик: `mpv` и `yt-dlp` должны быть доступны отдельно.
+
+После изменения исходного кода повторите команду сборки и перезапустите окно:
+уже запущенный экземпляр не обновится автоматически. Например, чтобы проверить
+исправление громкости, закройте старое окно и запустите новую сборку.
+
+Если SoundCloud недоступен напрямую, Linux-приложение наследует настройки
+прокси из окружения при запуске. При необходимости настройте `HTTP_PROXY` и
+`HTTPS_PROXY` на свой работающий прокси в том же терминале; после изменения
+настроек перезапустите приложение. Адреса и учётные данные не добавляйте в
+репозиторий.
 
 ## Quick start on Windows x64
 

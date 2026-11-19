@@ -1,5 +1,11 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { api, safeMessage, type Playlist, type Track } from "./api";
+import { api, safeMessage, type LibraryEntry, type Playlist, type Track } from "./api";
+import { FolderOpen, Heart, ListMusic, ListPlus, RefreshCw, RotateCcw, SkipBack, SkipForward, Trash2, Volume2, X } from "lucide-react";
+import { settingsStore, validVolume, type AppSettings, type SettingsStore } from "./settings";
+import blackMascot from "./assets/black.png";
+import soundcloudIcon from "./assets/soundcloud.png";
+import youtubeIcon from "./assets/youtube.png";
+import vkIcon from "./assets/vk.png";
 
 // Keep new webview sessions newer than requests retained by the Rust process.
 const generationBase = Date.now() * 1000;
@@ -17,6 +23,14 @@ function Artwork({ track, size }: { track: Track | null; size: "small" | "large"
   return <div className={`artwork artwork-${size} artwork-fallback`} aria-hidden="true">♪</div>;
 }
 
+function SourceIcon({ track }: { track: Track }) {
+  const source = track.source === "soundcloud" ? "SoundCloud" :
+    track.sourceUrl.startsWith("https://youtube.com/") || track.sourceUrl.startsWith("https://www.youtube.com/") ? "YouTube" :
+    track.sourceUrl.startsWith("https://vk.com/") || track.sourceUrl.startsWith("https://vkvideo.ru/") ? "VK" : null;
+  const icon = source === "SoundCloud" ? soundcloudIcon : source === "YouTube" ? youtubeIcon : source === "VK" ? vkIcon : null;
+  return icon ? <img className="source-icon" src={icon} alt="" title={`Source: ${source}`} aria-label={`Source: ${source}`} /> : null;
+}
+
 function PlayIcon() {
   return <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M8 5.5v13l11-6.5z" /></svg>;
 }
@@ -29,8 +43,12 @@ function StopIcon() {
   return <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M6.5 6.5h11v11h-11z" /></svg>;
 }
 
-export function App() {
-  const [view, setView] = useState<"tracks" | "playlists">("tracks");
+type QueueEntry = { key: number; track: Track };
+
+export function App({ settings = settingsStore }: { settings?: SettingsStore }) {
+  const [view, setView] = useState<"tracks" | "playlists" | "favourites" | "library" | "settings">("tracks");
+  const [queueOpen, setQueueOpen] = useState(false);
+  const queuePopupRef = useRef<HTMLDivElement>(null);
   const [query, setQuery] = useState("");
   const [tracks, setTracks] = useState<Track[]>([]);
   const [playlists, setPlaylists] = useState<Playlist[]>([]);
@@ -60,12 +78,79 @@ export function App() {
   const autoAdvance = useRef(false);
   const prepareGeneration = useRef(generationBase);
   const preparedKey = useRef("");
-  const retryPreparationAfter = useRef(0);
   const observedTransitions = useRef(0);
   const lookaheadGeneration = useRef(generationBase);
   const lookaheadKey = useRef("");
   const lookaheadTime = useRef(0);
   const lookaheadPending = useRef(false);
+  const [sessionQueue, setSessionQueue] = useState<QueueEntry[]>([]);
+  const sessionQueueRef = useRef<QueueEntry[]>([]);
+  const entryKey = useRef(0);
+  const playbackOrigin = useRef<"session" | "playlist">("session");
+  const [settingsReady, setSettingsReady] = useState(false);
+  const settingsLoaded = useRef(false);
+  const [settingsError, setSettingsError] = useState("");
+  const preferredVolume = useRef(100);
+  const settingsWrites = useRef(Promise.resolve());
+  const pendingVolume = useRef<{ generation: number; value: number } | null>(null);
+  const volumeSending = useRef(false);
+  const [library, setLibrary] = useState<LibraryEntry[]>([]);
+  const libraryRef = useRef<LibraryEntry[]>([]);
+  const [libraryError, setLibraryError] = useState("");
+  const [scanning, setScanning] = useState(false);
+  const [preferences, setPreferences] = useState<AppSettings>({ volume: 100 });
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = preferences.theme ?? "dark";
+  }, [preferences.theme]);
+
+  useEffect(() => {
+    if (!queueOpen) return;
+    const closeOnEscape = (event: KeyboardEvent) => { if (event.key === "Escape") setQueueOpen(false); };
+    const closeOutside = (event: PointerEvent) => {
+      if (!queuePopupRef.current?.contains(event.target as Node)) setQueueOpen(false);
+    };
+    document.addEventListener("keydown", closeOnEscape);
+    document.addEventListener("pointerdown", closeOutside);
+    return () => {
+      document.removeEventListener("keydown", closeOnEscape);
+      document.removeEventListener("pointerdown", closeOutside);
+    };
+  }, [queueOpen]);
+
+  async function refreshLibrary() {
+    try {
+      const entries = await api.library();
+      libraryRef.current = entries;
+      setLibrary(entries);
+      setLibraryError("");
+    } catch { setLibraryError("Could not load the music library."); }
+  }
+
+  useEffect(() => {
+    void refreshLibrary();
+    const timer = window.setInterval(() => { void refreshLibrary(); }, 3000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
+    let disposed = false;
+    void settings.getSettings().then(value => {
+      if (!validVolume(value.volume)) throw { code: "storage_failed" };
+      if (disposed) return;
+      preferredVolume.current = value.volume;
+      setVolume(value.volume);
+      setPreferences(value);
+    }).catch(() => {
+      if (!disposed) setSettingsError("Could not load volume settings.");
+    }).finally(() => {
+      if (!disposed) {
+        settingsLoaded.current = true;
+        setSettingsReady(true);
+      }
+    });
+    return () => { disposed = true; };
+  }, [settings]);
 
   useEffect(() => {
     let disposed = false;
@@ -87,7 +172,6 @@ export function App() {
               setQueueIndex(nextIndex);
               setSelected(next);
               preparedKey.current = "";
-              retryPreparationAfter.current = 0;
             }
           }
           setPlayback(status.state === "loading" ? "starting" : status.state);
@@ -95,8 +179,9 @@ export function App() {
           setDuration(status.durationMs ?? null);
           setVolume(status.volume ?? 100);
           setSeekable(status.seekable ?? false);
-          setPlayError(status.state === "error" ? status.error ?? "Playback failed. Please retry." : "");
-          if (status.state === "playing" || status.state === "paused") {
+          if (status.state === "error") setPlayError(status.error ?? "Playback failed. Please retry.");
+          if (status.state === "error") autoAdvance.current = false;
+          if (playbackOrigin.current === "playlist" && (status.state === "playing" || status.state === "paused")) {
             const next = queueRef.current[indexRef.current + 1];
             const neighbours: Track[] = [];
             for (let distance = 1; distance <= 40 && neighbours.length < 40; distance++) {
@@ -119,13 +204,13 @@ export function App() {
             const remaining = status.durationMs === null ? Infinity : status.durationMs - status.positionMs;
             // Resolve close to the transition so signed URLs do not sit unused
             // for an entire long track. Pause suspends speculative work.
-            if (status.state === "playing" && next && remaining <= 30000 && preparedKey.current !== next.sourceUrl && Date.now() >= retryPreparationAfter.current) {
+            if (autoAdvance.current && status.state === "playing" && next && remaining <= 30000 && preparedKey.current !== next.sourceUrl) {
               preparedKey.current = next.sourceUrl;
               const preparation = ++prepareGeneration.current;
               void api.prepare(preparation, next, generation).catch(() => {
                 if (preparation === prepareGeneration.current && generation === playbackGeneration.current) {
-                  preparedKey.current = "";
-                  retryPreparationAfter.current = Date.now() + 2000;
+                  setPlayError(safeMessage({ code: "playback_failed" }));
+                  autoAdvance.current = false;
                 }
               });
             }
@@ -170,7 +255,7 @@ export function App() {
     void api.cancelPlaylists(++playlistGeneration.current).catch(() => {});
   }
 
-  function switchView(next: "tracks" | "playlists") {
+  function switchView(next: typeof view) {
     setView(next);
     setOpenPlaylist(null);
     setSearchState("idle");
@@ -246,20 +331,18 @@ export function App() {
   }
 
   async function play(track: Track, fromQueue = false) {
+    if (!settingsLoaded.current) return;
     if (!fromQueue) {
-      autoAdvance.current = false;
-      queueRef.current = [];
-      indexRef.current = -1;
-      setQueue([]);
-      setQueueIndex(-1);
+      const entry = addToQueue(track);
+      selectQueue(entry.key);
+      return;
     }
     preparedKey.current = "";
-    if (!fromQueue) {
+    if (playbackOrigin.current === "session") {
       ++lookaheadGeneration.current;
       lookaheadPending.current = false;
       lookaheadKey.current = "";
     }
-    retryPreparationAfter.current = 0;
     observedTransitions.current = 0;
     const generation = ++playbackGeneration.current;
     resolving.current = true;
@@ -270,11 +353,19 @@ export function App() {
     setDuration(null);
     setSeekDraft(null);
     setVolumeDraft(null);
+    setControlling(false);
     try {
-      await api.play(generation, track);
+      const local = libraryRef.current.find(entry => (entry.availableOffline || track.source === "local") &&
+        entry.track.source === track.source && entry.track.id === track.id);
+      if (local) await api.playLibrary(generation, local.id, preferredVolume.current);
+      else if (track.source === "local") throw { code: "storage_failed" };
+      else await api.play(generation, track, {
+        fresh: playbackOrigin.current === "session", volume: preferredVolume.current,
+      });
       if (generation === playbackGeneration.current) setPlayback("starting");
     } catch (error) {
       if (generation !== playbackGeneration.current) return;
+      autoAdvance.current = false;
       setPlayback("error");
       setPlayError(safeMessage(error));
     } finally {
@@ -285,16 +376,26 @@ export function App() {
   async function stop() {
     autoAdvance.current = false;
     preparedKey.current = "";
+    ++lookaheadGeneration.current;
+    lookaheadPending.current = false;
+    lookaheadKey.current = "";
     void api.cancelPreparation(++prepareGeneration.current).catch(() => {});
     const generation = ++playbackGeneration.current;
     resolving.current = false;
     setPlayback("stopping");
+    setControlling(false);
     setPlayError("");
     setSeekDraft(null);
     setVolumeDraft(null);
     try {
       await api.stop(generation);
-      if (generation === playbackGeneration.current) setPlayback("stopped");
+      if (generation === playbackGeneration.current) {
+        setPlayback("stopped");
+        setPosition(0);
+        setDuration(null);
+        setSeekable(false);
+        setVolume(preferredVolume.current);
+      }
     } catch (error) {
       if (generation !== playbackGeneration.current) return;
       setPlayback("error");
@@ -303,13 +404,60 @@ export function App() {
   }
 
   function playPlaylist(startIndex = 0) {
-    if (!tracks.length) return;
+    if (!tracks.length || !settingsReady) return;
+    ++lookaheadGeneration.current;
+    lookaheadPending.current = false;
+    lookaheadKey.current = "";
+    playbackOrigin.current = "playlist";
     queueRef.current = [...tracks];
     indexRef.current = startIndex;
     setQueue([...tracks]);
     setQueueIndex(startIndex);
     autoAdvance.current = true;
     void play(tracks[startIndex], true);
+  }
+
+  function addToQueue(track: Track) {
+    const entry = { key: ++entryKey.current, track };
+    sessionQueueRef.current = [...sessionQueueRef.current, entry];
+    setSessionQueue(sessionQueueRef.current);
+    if (playbackOrigin.current === "session") {
+      queueRef.current = sessionQueueRef.current.map(item => item.track);
+      setQueue(queueRef.current);
+    }
+    return entry;
+  }
+
+  function selectQueue(key: number) {
+    if (!settingsReady) return;
+    const index = sessionQueueRef.current.findIndex(entry => entry.key === key);
+    if (index < 0) return;
+    playbackOrigin.current = "session";
+    queueRef.current = sessionQueueRef.current.map(entry => entry.track);
+    indexRef.current = index;
+    setQueue(queueRef.current);
+    setQueueIndex(index);
+    autoAdvance.current = true;
+    void play(queueRef.current[index], true);
+  }
+
+  function removeFromQueue(key: number) {
+    const index = sessionQueueRef.current.findIndex(entry => entry.key === key);
+    if (index < 0) return;
+    sessionQueueRef.current = sessionQueueRef.current.filter(entry => entry.key !== key);
+    setSessionQueue(sessionQueueRef.current);
+    if (playbackOrigin.current !== "session") return;
+    queueRef.current = sessionQueueRef.current.map(entry => entry.track);
+    setQueue(queueRef.current);
+    if (index === indexRef.current) {
+      indexRef.current = -1;
+      setQueueIndex(-1);
+      setSelected(null);
+      void stop();
+    } else if (index < indexRef.current) {
+      indexRef.current--;
+      setQueueIndex(indexRef.current);
+    }
   }
 
   function skipQueue(direction: number) {
@@ -331,7 +479,70 @@ export function App() {
     try { await operation(generation); }
     catch (error) {
       if (generation === playbackGeneration.current) setPlayError(safeMessage(error));
-    } finally { setControlling(false); }
+    } finally { if (generation === playbackGeneration.current) setControlling(false); }
+  }
+
+  function changeVolume(value: number) {
+    if (!validVolume(value)) return;
+    setVolumeDraft(value);
+    pendingVolume.current = { generation: playbackGeneration.current, value };
+    if (volumeSending.current) return;
+    volumeSending.current = true;
+    void (async () => {
+      while (pendingVolume.current) {
+        const next = pendingVolume.current;
+        pendingVolume.current = null;
+        if (next.generation !== playbackGeneration.current) continue;
+        try {
+          await api.volume(next.generation, next.value);
+          if (next.generation !== playbackGeneration.current) continue;
+          preferredVolume.current = next.value;
+          settingsWrites.current = settingsWrites.current.then(async () => {
+            const updated = await settings.updateSettings({ volume: next.value });
+            setPreferences(current => ({ ...current, volume: updated.volume }));
+            setSettingsError("");
+          }).catch(() => setSettingsError("Could not save volume settings."));
+          if (!pendingVolume.current) {
+            setVolume(next.value);
+            setVolumeDraft(null);
+          }
+        } catch (error) {
+          if (next.generation === playbackGeneration.current && !pendingVolume.current) {
+            setVolumeDraft(null);
+            setPlayError(safeMessage(error));
+          }
+        }
+      }
+      volumeSending.current = false;
+    })();
+  }
+
+  async function updatePreferences(patch: Partial<AppSettings>) {
+    try {
+      const updated = await settings.updateSettings(patch);
+      setPreferences(current => ({ ...current, ...patch, ...(patch.musicFolder ? { musicFolder: updated.musicFolder } : {}) }));
+      setSettingsError("");
+      if (patch.musicFolder) await scanMusic();
+    } catch { setSettingsError("Could not save settings."); }
+  }
+
+  async function scanMusic() {
+    setScanning(true);
+    try {
+      const result = await api.scanLibrary();
+      await refreshLibrary();
+      if (result.truncated) setLibraryError("Library scan reached the file limit.");
+      else if (result.skipped) setLibraryError(`Could not read ${result.skipped} item(s).`);
+    } catch { setLibraryError("Could not scan the music folder."); }
+    finally { setScanning(false); }
+  }
+
+  async function toggleFavourite(track: Track) {
+    const existing = libraryRef.current.find(entry => entry.track.source === track.source && entry.track.id === track.id);
+    try {
+      await api.favourite(track, !existing?.favourite);
+      await refreshLibrary();
+    } catch { setLibraryError("Could not update favourites."); }
   }
 
   const statusText =
@@ -345,24 +556,25 @@ export function App() {
 
   return <div className="app">
     <aside className="sidebar" aria-label="Navigation">
-      <div className="brand"><span className="brand-mark">♪</span><span>Fuzzy Music</span></div>
+      <div className="brand"><img className="brand-mark" src={blackMascot} alt="" /><span>Fuzzy Music</span></div>
       <nav className="nav">
-        <span className="nav-item active" aria-current="page">Search</span>
-        <span className="nav-item soon">Favourites <em>soon</em></span>
-        <span className="nav-item">Playlists <em>beta</em></span>
+        <button aria-label="Search navigation" className={view === "tracks" || view === "playlists" ? "nav-item active" : "nav-item"} onClick={() => switchView("tracks")}>Search</button>
+        <button className={view === "favourites" ? "nav-item active" : "nav-item"} onClick={() => switchView("favourites")}>Favourites</button>
+        <button className={view === "library" ? "nav-item active" : "nav-item"} onClick={() => switchView("library")}>Music library</button>
+        <button className={view === "settings" ? "nav-item active" : "nav-item"} onClick={() => switchView("settings")}>Settings</button>
       </nav>
       <p className="sidebar-note">Streams public SoundCloud tracks. No account or API key required.</p>
     </aside>
 
     <div className="content">
-      <div className="tabs" role="tablist" aria-label="Search type">
+      {(view === "tracks" || view === "playlists") && <div className="tabs" role="tablist" aria-label="Search type">
         <button role="tab" aria-selected={view === "tracks"} className={view === "tracks" ? "tab active" : "tab"}
           onClick={() => switchView("tracks")}>Tracks</button>
         <button role="tab" aria-selected={view === "playlists"} className={view === "playlists" ? "tab active" : "tab"}
           onClick={() => switchView("playlists")}>Playlists</button>
-      </div>
+      </div>}
 
-      <form className="search" onSubmit={search}>
+      {(view === "tracks" || view === "playlists") && <form className="search" onSubmit={search}>
         <label className="sr-only" htmlFor="query">{view === "tracks" ? "Track or artist" : "Playlist name"}</label>
         <span className="search-icon" aria-hidden="true">⌕</span>
         <input id="query" value={query}
@@ -374,9 +586,9 @@ export function App() {
           void api.cancelPlaylists(++playlistGeneration.current).catch(() => {});
           setSearchState("cancelled");
         }}>Cancel</button>}
-      </form>
+      </form>}
 
-      <p className="results-status" role="status" aria-live="polite">
+      {(view === "tracks" || view === "playlists") && <p className="results-status" role="status" aria-live="polite">
         {searchState === "idle" ? "Ready" :
          searchState === "searching" ? "Searching..." :
          searchState === "empty" ? (view === "tracks" ? "No tracks found." : "No playlists found.") :
@@ -384,7 +596,59 @@ export function App() {
          searchState === "error" ? searchError :
          view === "playlists" ? `${playlists.length} ${playlists.length === 1 ? "playlist" : "playlists"}` :
          `${tracks.length} ${tracks.length === 1 ? "track" : "tracks"}`}
-      </p>
+      </p>}
+
+      {libraryError && <p className="library-error" role="alert">{libraryError}</p>}
+      {view === "settings" && <section className="settings-view" aria-label="Settings">
+        <h2>Settings</h2>
+        <label htmlFor="download-quality">Download quality</label>
+        <select id="download-quality" value={preferences.downloadQuality ?? "best"}
+          onChange={event => void updatePreferences({ downloadQuality: event.target.value as AppSettings["downloadQuality"] })}>
+          <option value="best">Best available</option>
+          <option value="high">High (prefer up to 320 kbps)</option>
+          <option value="medium">Medium (prefer up to 192 kbps)</option>
+          <option value="standard">Standard (prefer up to 128 kbps)</option>
+          <option value="small">Data saver (prefer up to 64 kbps)</option>
+          <option value="flac">FLAC (converted)</option>
+        </select>
+        {preferences.downloadQuality === "flac" && <p className="results-status">Requires ffmpeg. Conversion cannot restore quality lost by the source.</p>}
+        <label htmlFor="theme">Theme</label>
+        <select id="theme" value={preferences.theme ?? "dark"}
+          onChange={event => void updatePreferences({ theme: event.target.value as AppSettings["theme"] })}>
+          <option value="dark">Dark</option>
+          <option value="light">Light</option>
+        </select>
+        <label>Music folder</label>
+        <div className="folder-setting"><span>{preferences.musicFolder ?? "Unavailable"}</span>
+          <button className="row-play" title="Choose music folder" aria-label="Choose music folder" onClick={() => void (async () => {
+            try { const folder = await api.chooseFolder(); if (folder) await updatePreferences({ musicFolder: folder }); }
+            catch { setSettingsError("Could not choose a music folder."); }
+          })()}><FolderOpen /></button>
+        </div>
+      </section>}
+
+      {(view === "favourites" || view === "library") && <section className="session-queue" aria-label={view === "favourites" ? "Favourite tracks" : "Music library"}>
+        <div className="library-heading"><h2>{view === "favourites" ? "Favourites" : "Music library"}</h2>
+          <button className="row-play" title="Refresh music folder" aria-label="Refresh music folder" disabled={scanning} onClick={() => void scanMusic()}><RefreshCw /></button>
+        </div>
+        {library.filter(entry => view === "favourites" ? entry.favourite : entry.availableOffline || entry.track.source === "local").length === 0 &&
+          <p className="results-status">{view === "favourites" ? "No favourites yet." : "No local tracks found."}</p>}
+        <ol>{library.filter(entry => view === "favourites" ? entry.favourite : entry.availableOffline || entry.track.source === "local").map(entry =>
+          <li key={entry.id}>
+            <Artwork track={entry.track} size="small" />
+            <div className="row-text"><strong>{entry.track.title}</strong><span>{entry.track.author} · {
+              entry.availableOffline ? "Available offline" : entry.downloadState === "downloading" ? "Downloading" :
+              entry.downloadState === "pending" ? "Waiting to download" : entry.downloadState === "error" ? "Download failed" :
+              entry.downloadState === "missing" ? "File missing" : "Online"
+            }</span></div>
+            {entry.favourite && !entry.availableOffline && (entry.downloadState === "error" || entry.downloadState === "missing" || entry.downloadState === "none") &&
+              <button className="row-play" title={`Retry ${entry.track.title}`} aria-label={`Retry ${entry.track.title}`} onClick={() => void api.retryDownload(entry.id).then(refreshLibrary).catch(() => setLibraryError("Could not retry download."))}><RefreshCw /></button>}
+            <button className="row-play" title={`Add ${entry.track.title} to queue`} aria-label={`Add ${entry.track.title} to queue`} onClick={() => addToQueue(entry.track)}><ListPlus /></button>
+            <button className="row-play" title={`Play ${entry.track.title}`} aria-label={`Play ${entry.track.title}`} disabled={!settingsReady} onClick={() => void play(entry.track)}><PlayIcon /></button>
+            <button className={entry.favourite ? "row-play liked" : "row-play"} title={entry.favourite ? `Remove ${entry.track.title} from favourites` : `Add ${entry.track.title} to favourites`}
+              aria-label={entry.favourite ? `Remove ${entry.track.title} from favourites` : `Add ${entry.track.title} to favourites`} onClick={() => void toggleFavourite(entry.track)}><Heart /></button>
+          </li>)}</ol>
+      </section>}
 
       {view === "playlists" && !openPlaylist &&
         <section aria-label="Playlist results" className="playlist-grid">
@@ -430,12 +694,12 @@ export function App() {
                 </p>}
             </div>
           </div>
-          <button className="primary" onClick={() => playPlaylist() } disabled={!tracks.length}>Play playlist</button>
+          <button className="primary" onClick={() => playPlaylist() } disabled={!tracks.length || !settingsReady}>Play playlist</button>
         </section>}
 
-      {tracks.length > 0 &&
+      {(view === "tracks" || view === "playlists") && tracks.length > 0 &&
         <section aria-label="Search results" className="results">
-          <div className="results-head"><span>#</span><span>Title</span><span>Time</span><span /></div>
+          <div className="results-head"><span>#</span><span /><span>Title</span><span /><span>Time</span><span /><span /><span /></div>
           <ul>
             {tracks.map((track, index) => {
               const current = selected?.id === track.id;
@@ -446,8 +710,13 @@ export function App() {
                   <strong>{track.title}</strong>
                   <span>{track.author}</span>
                 </div>
+                <SourceIcon track={track} />
                 <span className="row-duration">{track.durationMs === null ? "--:--" : time(track.durationMs)}</span>
-                <button className="row-play" onClick={() => openPlaylist ? playPlaylist(index) : void play(track)} aria-label={`Play ${track.title}`}>
+                <button className={library.some(entry => entry.track.source === track.source && entry.track.id === track.id && entry.favourite) ? "row-play liked" : "row-play"}
+                  title={`Favourite ${track.title}`} aria-label={`Favourite ${track.title}`} onClick={() => void toggleFavourite(track)}><Heart /></button>
+                <button className="row-play" title={`Add ${track.title} to queue`}
+                  onClick={() => addToQueue(track)} aria-label={`Add ${track.title} to queue`}><ListPlus /></button>
+                <button className="row-play" disabled={!settingsReady} title={`Play ${track.title}`} onClick={() => openPlaylist ? playPlaylist(index) : void play(track)} aria-label={`Play ${track.title}`}>
                   <PlayIcon />
                 </button>
               </li>;
@@ -455,7 +724,7 @@ export function App() {
           </ul>
         </section>}
 
-      {tracks.length === 0 && searchState === "idle" &&
+      {(view === "tracks" || view === "playlists") && tracks.length === 0 && searchState === "idle" &&
         <section className="empty-state">
           <h2>{view === "tracks" ? "Find something to play" : "Find a playlist"}</h2>
           <p>{view === "tracks"
@@ -465,18 +734,10 @@ export function App() {
     </div>
 
     <footer className="player" aria-label="Playback">
-      <div className="now-playing">
-        <Artwork track={selected} size="small" />
-        <div className="now-text">
-          <strong>{selected ? selected.title : "No track selected"}</strong>
-          <span>{selected ? selected.author : "Search to begin"}</span>
-        </div>
-      </div>
-
       <div className="transport">
         <p className="transport-status" role="status" aria-live="polite">{statusText}</p>
         <div className="transport-buttons">
-          <button className="ghost small" disabled={queueIndex <= 0} onClick={() => skipQueue(-1)} aria-label="Previous track">‹</button>
+          <button className="icon-btn" disabled={!settingsReady || queueIndex <= 0} onClick={() => skipQueue(-1)} aria-label="Previous track" title="Previous track"><SkipBack /></button>
           <button className="icon-btn" disabled={!active || controlling}
             aria-label={playback === "paused" ? "Resume" : "Pause"}
             onClick={() => void control(generation => api.pause(generation, playback !== "paused"))}>
@@ -485,8 +746,11 @@ export function App() {
           <button className="icon-btn" onClick={() => void stop()} disabled={playback === "stopping"} aria-label="Stop">
             <StopIcon />
           </button>
-          {selected && <button className="ghost small" onClick={() => void play(selected)}>Play again</button>}
-          <button className="ghost small" disabled={queueIndex < 0 || queueIndex + 1 >= queue.length} onClick={() => skipQueue(1)} aria-label="Next track">›</button>
+          {selected && <button className="icon-btn" title="Play again" aria-label="Play again" disabled={!settingsReady} onClick={() => {
+            autoAdvance.current = true;
+            void play(selected, true);
+          }}><RotateCcw /></button>}
+          <button className="icon-btn" disabled={!settingsReady || queueIndex < 0 || queueIndex + 1 >= queue.length} onClick={() => skipQueue(1)} aria-label="Next track" title="Next track"><SkipForward /></button>
         </div>
         {queueIndex >= 0 && <span className="results-status">{queueIndex + 1} / {queue.length}</span>}
       </div>
@@ -504,18 +768,46 @@ export function App() {
           <output>{time(seekDraft ?? position)} / {duration === null ? "--:--" : time(duration)}</output>
         </div>
         <div className="volume">
-          <label htmlFor="volume">Volume</label>
+          <button className="volume-trigger icon-btn" aria-label="Volume controls" title="Volume"><Volume2 /></button>
+          <div className="volume-popup">
+          <label htmlFor="volume" className="sr-only">Volume</label>
           <input id="volume" type="range" min="0" max="100" step="1" value={volumeDraft ?? volume} disabled={!active}
-            onChange={event => setVolumeDraft(Number(event.target.value))}
-            onPointerCancel={() => setVolumeDraft(null)}
-            onBlur={() => setVolumeDraft(null)}
-            onPointerUp={event => { if (!active) return; const value = Number(event.currentTarget.value); setVolumeDraft(null); void control(generation => api.volume(generation, value)); }}
-            onKeyUp={event => { if (["ArrowLeft", "ArrowRight", "Home", "End", "PageUp", "PageDown"].includes(event.key)) { const value = Number(event.currentTarget.value); setVolumeDraft(null); void control(generation => api.volume(generation, value)); } }} />
+            onChange={event => changeVolume(Number(event.target.value))} />
           <output>{Math.round(volumeDraft ?? volume)}%</output>
+          </div>
+        </div>
+        <div className="queue-control" ref={queuePopupRef}>
+          <button className="icon-btn" aria-label="Queue" title={`Queue (${sessionQueue.length})`}
+            aria-expanded={queueOpen} aria-controls="queue-popup" onClick={() => setQueueOpen(open => !open)}><ListMusic /></button>
+          {queueOpen && <section id="queue-popup" className="queue-popup session-queue" aria-label="Session queue">
+            <div className="queue-heading"><h2>Queue ({sessionQueue.length})</h2>
+              <button className="row-play" aria-label="Close queue" title="Close queue" onClick={() => setQueueOpen(false)}><X /></button>
+            </div>
+            {!sessionQueue.length && <p className="results-status">Queue is empty.</p>}
+            <ol>
+              {sessionQueue.map((entry, index) => {
+                const current = playbackOrigin.current === "session" && queueIndex === index;
+                return <li key={entry.key} aria-current={current ? "true" : undefined}>
+                  <Artwork track={entry.track} size="small" />
+                  <div className="row-text"><strong>{entry.track.title}</strong><span>{entry.track.author}</span></div>
+                  <button className="row-play" disabled={!settingsReady} title={`Play queued ${entry.track.title}`}
+                    aria-label={`Play queued ${entry.track.title}`} onClick={() => selectQueue(entry.key)}><PlayIcon /></button>
+                  <button className="row-play" title={`Remove ${entry.track.title} from queue`}
+                    aria-label={`Remove ${entry.track.title} from queue`} onClick={() => removeFromQueue(entry.key)}><Trash2 /></button>
+                </li>;
+              })}
+            </ol>
+          </section>}
         </div>
       </div>
 
+      <div className="now-playing">
+        <Artwork track={selected} size="small" />
+        <div className="now-text"><strong>{selected ? selected.title : "No track selected"}</strong>
+          <span>{selected ? selected.author : "Search to begin"}</span></div>
+      </div>
       {playError && playback !== "error" && <p className="player-error" role="alert">{playError}</p>}
+      {settingsError && <p className="player-error" role="alert">{settingsError}</p>}
     </footer>
   </div>;
 }

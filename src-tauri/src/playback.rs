@@ -62,10 +62,20 @@ fn milliseconds(value: &Value) -> Option<u64> {
 }
 
 impl Player {
+    #[cfg(test)]
     pub fn start_with_network(
         executable: &Path,
         url: &str,
         network: Option<&fuzzy_application::NetworkPolicy>,
+    ) -> Result<Self, AppError> {
+        Self::start_with_volume(executable, url, network, 100.0)
+    }
+
+    pub fn start_with_volume(
+        executable: &Path,
+        url: &str,
+        network: Option<&fuzzy_application::NetworkPolicy>,
+        volume: f64,
     ) -> Result<Self, AppError> {
         let unique = format!(
             "fuzzy-mpv-{}-{}",
@@ -85,6 +95,7 @@ impl Player {
             network.apply_with_loopback_bypass(&mut command);
         }
         command.arg(format!("--input-ipc-server={}", endpoint.display()));
+        command.arg(format!("--volume={volume}"));
         command.args([
             "--no-config",
             "--no-video",
@@ -97,7 +108,6 @@ impl Player {
             "--network-timeout=15",
             "--demuxer-max-bytes=16M",
             "--demuxer-max-back-bytes=4M",
-            "--volume=100",
             "--idle=yes",
             "--gapless-audio=yes",
             "--prefetch-playlist=yes",
@@ -125,7 +135,9 @@ impl Player {
             let connected = std::os::unix::net::UnixStream::connect(&endpoint);
             match connected {
                 Ok(connection) => {
-                    return Self::connected(child, endpoint, connection);
+                    let mut player = Self::connected(child, endpoint, connection)?;
+                    player.volume = volume;
+                    return Ok(player);
                 }
                 Err(_) if Instant::now() < deadline => {
                     std::thread::sleep(Duration::from_millis(20));
@@ -456,7 +468,8 @@ mod tests {
     fn real_mpv_controls() {
         let executable = std::env::var_os("FUZZY_MPV").expect("FUZZY_MPV");
         let audio = std::env::var("FUZZY_TEST_AUDIO").expect("FUZZY_TEST_AUDIO");
-        let mut player = Player::start_with_network(Path::new(&executable), &audio, None).unwrap();
+        let mut player =
+            Player::start_with_volume(Path::new(&executable), &audio, None, 35.0).unwrap();
         fn wait(player: &mut Player, check: impl Fn(&Snapshot) -> bool) -> Snapshot {
             let start = Instant::now();
             loop {
@@ -474,7 +487,7 @@ mod tests {
             }
         }
         wait(&mut player, |s| {
-            s.state == "playing" && s.seekable && s.duration_ms.is_some()
+            s.state == "playing" && s.seekable && s.duration_ms.is_some() && s.volume == 35.0
         });
         player.pause(true).unwrap();
         let paused = wait(&mut player, |s| s.state == "paused");

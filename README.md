@@ -56,7 +56,10 @@ starts their list so the next track follows automatically, and the same list
 behavior applies to search results, playlists, Favourites and the music library.
 See decision 0012. Opening an album uses its own cover-first banner with a large
 artwork, blurred backdrop, total duration and Play album action, while regular
-playlists keep the compact header. See decision 0014. Integration checks and
+playlists keep the compact header. See decision 0014. Settings also accept a
+personal background image with a live opacity slider; the file is copied into
+the app data directory and served through a narrowly scoped asset protocol. See
+decision 0015. Integration checks and
 accepted review follow-ups
 are recorded in [`tasks/pr20-pr23-integration.md`](tasks/pr20-pr23-integration.md).
 Session queue behavior and #22 acceptance are recorded in

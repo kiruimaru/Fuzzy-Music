@@ -2,7 +2,7 @@ import { invoke } from "@tauri-apps/api/core";
 
 export type DownloadQuality = "best" | "high" | "medium" | "standard" | "small" | "flac";
 export type Theme = "dark" | "light";
-export type AppSettings = { volume: number; downloadQuality?: DownloadQuality; musicFolder?: string; theme?: Theme };
+export type AppSettings = { volume: number; downloadQuality?: DownloadQuality; musicFolder?: string; theme?: Theme; backgroundImage?: string; backgroundOpacity?: number };
 
 // Issue #21 supplies persistence behind this interface.
 export interface SettingsStore {

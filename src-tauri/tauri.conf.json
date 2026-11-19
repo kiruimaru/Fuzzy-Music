@@ -12,7 +12,8 @@
   "app": {
     "windows": [{ "title": "Fuzzy Music", "width": 760, "height": 600, "minWidth": 320, "minHeight": 320 }],
     "security": {
-      "csp": "default-src 'self'; connect-src ipc: http://ipc.localhost; style-src 'self' 'unsafe-inline'; img-src 'self' https://i1.sndcdn.com https://i2.sndcdn.com data:"
+      "csp": "default-src 'self'; connect-src ipc: http://ipc.localhost; style-src 'self' 'unsafe-inline'; img-src 'self' asset: http://asset.localhost https://i1.sndcdn.com https://i2.sndcdn.com data:",
+      "assetProtocol": { "enable": true, "scope": ["$APPDATA/**"] }
     }
   },
   "bundle": { "active": false, "icon": ["icons/icon.png", "icons/icon.ico"] }

@@ -678,6 +678,77 @@ async fn choose_music_folder(app: tauri::AppHandle) -> Result<Option<String>, Ap
     .await
 }
 
+#[tauri::command]
+async fn choose_background_image(app: tauri::AppHandle) -> Result<Option<String>, AppError> {
+    use tauri_plugin_dialog::DialogExt;
+    worker(move || {
+        let picked = app
+            .dialog()
+            .file()
+            .add_filter(
+                "Images",
+                &[
+                    "png", "jpg", "jpeg", "webp", "gif", "bmp", "avif", "heic", "tif", "tiff",
+                    "svg",
+                ],
+            )
+            .add_filter("All files", &["*"])
+            .blocking_pick_file();
+        let Some(picked) = picked else {
+            return Ok(None);
+        };
+        let source = picked.into_path().map_err(|_| library::storage_error())?;
+        let directory = app
+            .path()
+            .app_data_dir()
+            .map_err(|_| library::storage_error())?
+            .join("background");
+        std::fs::create_dir_all(&directory).map_err(|_| library::storage_error())?;
+        for entry in std::fs::read_dir(&directory)
+            .map_err(|_| library::storage_error())?
+            .flatten()
+        {
+            let _ = std::fs::remove_file(entry.path());
+        }
+        let extension = source
+            .extension()
+            .and_then(|value| value.to_str())
+            .map(|value| value.to_ascii_lowercase())
+            .filter(|value| {
+                (1..=8).contains(&value.len())
+                    && value
+                        .chars()
+                        .all(|character| character.is_ascii_alphanumeric())
+            })
+            .unwrap_or_else(|| "image".into());
+        let target = directory.join(format!("background.{extension}"));
+        std::fs::copy(&source, &target).map_err(|_| library::storage_error())?;
+        Ok(Some(target.to_string_lossy().into_owned()))
+    })
+    .await
+}
+
+#[tauri::command]
+async fn clear_background_image(app: tauri::AppHandle) -> Result<(), AppError> {
+    worker(move || {
+        let directory = app
+            .path()
+            .app_data_dir()
+            .map_err(|_| library::storage_error())?
+            .join("background");
+        if directory.is_dir() {
+            for entry in std::fs::read_dir(&directory)
+                .map_err(|_| library::storage_error())?
+                .flatten()
+            {
+                let _ = std::fs::remove_file(entry.path());
+            }
+        }
+        Ok(())
+    })
+    .await
+}
+
 impl Shell {
     fn prepare(
         &self,
@@ -1142,6 +1213,8 @@ pub fn run() {
             remove_library_track,
             play_library_track,
             choose_music_folder,
+            choose_background_image,
+            clear_background_image,
             search_tracks,
             cancel_search,
             search_playlists,

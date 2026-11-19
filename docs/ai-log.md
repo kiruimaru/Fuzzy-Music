@@ -956,4 +956,11 @@ the minimal Tauri shell.
 - The banner stacks vertically and the cover shrinks below 560 px. No new dependencies, playback or storage changes.
 - Verification: frontend 37 tests passed; Rust workspace 60 passed, 4 ignored; TypeScript/Vite build and Tauri debug build passed.
 
+## 2026-11-19 — Custom player background
+
+- Settings schema version 4 adds `background_image` and `background_opacity` (0–100, default 60). The chosen file is copied into the app data directory under `background/`; only the copy is displayed and settings validate that a saved path is absolute and present.
+- Tauri's asset protocol is enabled with a scope limited to `$APPDATA/**`, and the CSP allows `asset:` and `http://asset.localhost` for images. No JavaScript dependencies were added; the `protocol-asset` feature brings `http-range`.
+- Settings offers choose/remove actions, a small preview, and a live opacity slider. The slider updates the `--bg-image`/`--bg-opacity` variables on every input event and persists 300 ms after the drag settles; the background layer sits behind the app root.
+- Verification: frontend 38 tests passed; Rust shell tests 35 passed, 3 ignored; rustfmt clean; TypeScript/Vite build and Tauri debug build passed.
+
 

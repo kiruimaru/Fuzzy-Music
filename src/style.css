@@ -37,6 +37,15 @@
 * { box-sizing: border-box; }
 html, body, #root { height: 100%; }
 body { margin: 0; background: var(--bg); }
+#root { position: relative; z-index: 1; }
+body::before {
+  content: "";
+  position: fixed; inset: 0; z-index: 0; pointer-events: none;
+  background-image: var(--bg-image, none);
+  background-size: cover;
+  background-position: center;
+  opacity: var(--bg-opacity, 0%);
+}
 
 .sr-only {
   position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
@@ -315,8 +324,14 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 .library-error { color: #ff9c9c; margin: 0; font-size: 13px; }
 .settings-view { display: grid; gap: 12px; max-width: 620px; }
 .settings-view h2 { font-size: 20px; margin: 0 0 12px; }
+.settings-view h3 { font-size: 15px; margin: 10px 0 0; }
 .settings-view label { font-size: 13px; color: var(--muted); }
 .settings-view select, .folder-setting { border: 1px solid var(--line); border-radius: 6px; padding: 10px; background: var(--panel); color: var(--text); font: inherit; }
+.background-setting { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.background-preview { width: 132px; height: 74px; object-fit: cover; border-radius: 10px; border: 1px solid var(--line); }
+.background-opacity { display: flex; align-items: center; gap: 12px; }
+.background-opacity input { flex: 1 1 auto; }
+.background-opacity span { min-width: 42px; font-size: 13px; color: var(--muted); }
 .folder-setting { display: flex; align-items: center; gap: 12px; justify-content: space-between; }
 .folder-setting span { overflow-wrap: anywhere; min-width: 0; }
 .folder-setting button { flex-shrink: 0; }

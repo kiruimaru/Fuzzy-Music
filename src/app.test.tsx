@@ -29,6 +29,7 @@ vi.mock("./api", async (original) => ({
     favouritePlaylist: vi.fn().mockResolvedValue(undefined), downloadPlaylist: vi.fn().mockResolvedValue(undefined),
     cancelPlaylistDownload: vi.fn().mockResolvedValue(undefined),
     playLibrary: vi.fn().mockResolvedValue(undefined), chooseFolder: vi.fn(),
+    chooseBackground: vi.fn(), clearBackground: vi.fn().mockResolvedValue(undefined),
   },
 }));
 
@@ -36,6 +37,11 @@ vi.mock("./settings", async (original) => {
   const module = await original<typeof import("./settings")>();
   return { ...module, settingsStore: module.createMemorySettingsStore() };
 });
+
+// Tauri injects this helper in the real webview; tests only need the URL shape.
+(window as unknown as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__ = {
+  convertFileSrc: (path: string) => `http://asset.localhost/${encodeURIComponent(path)}`,
+};
 
 const track: Track = {
   id: "1", title: "Example", author: "Artist", artworkUrl: null,
@@ -754,6 +760,23 @@ test("theme and FLAC preference are saved and applied", async () => {
   fireEvent.change(screen.getByLabelText("Download quality"), { target: { value: "flac" } });
   await screen.findByText(/Requires ffmpeg/);
   await waitFor(async () => expect(await settings.getSettings()).toMatchObject({ theme: "light", downloadQuality: "flac" }));
+});
+
+test("background image and opacity are configurable in settings", async () => {
+  const settings = createMemorySettingsStore({ volume: 100 });
+  vi.mocked(api.chooseBackground).mockResolvedValue("C:/data/background.png");
+  render(<App settings={settings} />);
+  fireEvent.click(screen.getByRole("button", { name: "Settings" }));
+  await screen.findByRole("button", { name: "Choose background image" });
+  fireEvent.click(screen.getByRole("button", { name: "Choose background image" }));
+  await waitFor(() => expect(document.documentElement.style.getPropertyValue("--bg-image")).toContain("background.png"));
+  expect(await settings.getSettings()).toMatchObject({ backgroundImage: "C:/data/background.png" });
+  fireEvent.change(screen.getByLabelText("Background opacity"), { target: { value: "35" } });
+  await waitFor(() => expect(document.documentElement.style.getPropertyValue("--bg-opacity")).toBe("35%"));
+  await waitFor(async () => expect((await settings.getSettings()).backgroundOpacity).toBe(35));
+  fireEvent.click(screen.getByRole("button", { name: "Remove background image" }));
+  await waitFor(() => expect(document.documentElement.style.getPropertyValue("--bg-image")).toBe("none"));
+  expect(api.clearBackground).toHaveBeenCalled();
 });
 
 test("artist pages open from a track and play their list in order", async () => {

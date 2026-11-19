@@ -622,6 +622,15 @@ async fn retry_download(library: tauri::State<'_, LibraryState>, id: i64) -> Res
 }
 
 #[tauri::command]
+async fn remove_library_track(
+    library: tauri::State<'_, LibraryState>,
+    id: i64,
+) -> Result<(), AppError> {
+    let library = library.get()?;
+    worker(move || library.remove(id)).await
+}
+
+#[tauri::command]
 async fn play_library_track(
     shell: tauri::State<'_, Arc<Shell>>,
     library: tauri::State<'_, LibraryState>,
@@ -1130,6 +1139,7 @@ pub fn run() {
             download_playlist,
             cancel_playlist_download,
             retry_download,
+            remove_library_track,
             play_library_track,
             choose_music_folder,
             search_tracks,

@@ -25,6 +25,7 @@ vi.mock("./api", async (original) => ({
     playlistEntries: vi.fn().mockResolvedValue([]),
     scanLibrary: vi.fn().mockResolvedValue({ imported: 0, skipped: 0, truncated: false }),
     favourite: vi.fn().mockResolvedValue(undefined), retryDownload: vi.fn().mockResolvedValue(undefined),
+    removeTrack: vi.fn().mockResolvedValue(undefined),
     favouritePlaylist: vi.fn().mockResolvedValue(undefined), downloadPlaylist: vi.fn().mockResolvedValue(undefined),
     cancelPlaylistDownload: vi.fn().mockResolvedValue(undefined),
     playLibrary: vi.fn().mockResolvedValue(undefined), chooseFolder: vi.fn(),
@@ -658,6 +659,20 @@ test("favourite download appears in the library and is played offline", async ()
   fireEvent.click(within(favourites).getByRole("button", { name: "Remove Example from favourites" }));
   await waitFor(() => expect(api.favourite).toHaveBeenCalledWith(track, false));
   // Unliking drops the row immediately, without waiting for the next refresh.
+  await waitFor(() => expect(within(favourites).queryByRole("button", { name: "Play Example" })).toBeNull());
+  expect(within(favourites).getByText("No favourites yet.")).toBeTruthy();
+});
+
+test("favourite can be deleted from the library with its downloaded file", async () => {
+  const entry = { id: 8, track, favourite: true, downloadState: "ready" as const, error: null, availableOffline: true };
+  let present = true;
+  vi.mocked(api.library).mockImplementation(async () => present ? [entry] : []);
+  vi.mocked(api.removeTrack).mockImplementation(async () => { present = false; });
+  render(<App settings={createMemorySettingsStore()} />);
+  fireEvent.click(screen.getByRole("button", { name: "Favourites" }));
+  const favourites = await screen.findByRole("region", { name: "Favourite tracks" });
+  fireEvent.click(within(favourites).getByRole("button", { name: "Delete Example from library" }));
+  await waitFor(() => expect(api.removeTrack).toHaveBeenCalledWith(8));
   await waitFor(() => expect(within(favourites).queryByRole("button", { name: "Play Example" })).toBeNull());
   expect(within(favourites).getByText("No favourites yet.")).toBeTruthy();
 });

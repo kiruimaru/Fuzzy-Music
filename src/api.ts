@@ -81,6 +81,7 @@ export const api = {
   downloadPlaylist: (playlist: Playlist) => invoke<void>("download_playlist", { playlist }),
   cancelPlaylistDownload: (playlist: Playlist) => invoke<void>("cancel_playlist_download", { playlist }),
   retryDownload: (id: number) => invoke<void>("retry_download", { id }),
+  removeTrack: (id: number) => invoke<void>("remove_library_track", { id }),
   chooseFolder: () => invoke<string | null>("choose_music_folder"),
   playLibrary: (generation: number, id: number, volume: number) =>
     invoke<void>("play_library_track", { generation, id, volume }),

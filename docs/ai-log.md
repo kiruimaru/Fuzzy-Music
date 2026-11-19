@@ -788,4 +788,11 @@ the minimal Tauri shell.
 - Playlist cards were restructured so the author link is a real button rather than a nested one inside the open-card button.
 - Verification: frontend 35 tests including immediate-unlike and playlist-author-navigation cases; TypeScript/Vite build passed; Tauri debug build passed.
 
+## 2026-11-19 — Deleting saved tracks
+
+- Favourites and Music library rows gained an explicit delete action next to the heart. Deleting cancels an in-flight download, removes the media row and its downloaded file, and drops `playlist_tracks` memberships so playlists do not keep phantom entries.
+- Unliking stays non-destructive: the heart keeps a downloaded file in the library while delete removes it entirely. Favourite playlist rows use the same explicit delete action to drop the bookmark and keep their downloaded audio.
+- A download that finishes after its media row was deleted now removes its own persisted file instead of leaving an orphan.
+- Verification: fixture-backed Rust test covers file and playlist-membership removal; workspace tests 59 passed and 4 ignored; frontend 36 tests; clippy clean; Tauri debug build passed.
+
 

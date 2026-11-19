@@ -21,8 +21,10 @@ Liking a SoundCloud track queues one disk download, using the best available
 source audio by default. Settings offer lower bitrate preferences and a folder
 chooser. Download failures remain visible and can be retried. The application
 indexes supported audio in that folder at startup and can play it offline.
-Removing a favourite never deletes its downloaded file. Download only tracks
-you have permission to keep; available formats depend on the source.
+Removing a favourite never deletes its downloaded file. A separate delete action
+in Favourites and the Music library removes the library entry together with its
+downloaded file and drops the track from any downloaded playlist. Download only
+tracks you have permission to keep; available formats depend on the source.
 FLAC conversion requires `ffmpeg` on PATH and cannot recover quality lost in
 the source stream. Changing quality affects future downloads only.
 

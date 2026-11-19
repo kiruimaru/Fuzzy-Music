@@ -636,6 +636,20 @@ export function App({ settings = settingsStore }: { settings?: SettingsStore }) 
     }
   }
 
+  async function removeTrack(entry: LibraryEntry) {
+    // The row disappears immediately; a failed delete is restored by the
+    // refresh below together with an error message.
+    libraryRef.current = libraryRef.current.filter(item => item.id !== entry.id);
+    setLibrary(libraryRef.current);
+    try {
+      await api.removeTrack(entry.id);
+      await refreshLibrary();
+    } catch {
+      setLibraryError("Could not delete the track.");
+      await refreshLibrary();
+    }
+  }
+
   async function downloadPlaylist(playlist: Playlist) {
     try {
       await api.downloadPlaylist(playlist);
@@ -797,6 +811,8 @@ export function App({ settings = settingsStore }: { settings?: SettingsStore }) 
             <button className="row-play" title={`Play ${entry.track.title}`} aria-label={`Play ${entry.track.title}`} disabled={!settingsReady} onClick={() => playList(libraryTracks, index)}><PlayIcon /></button>
             <button className={entry.favourite ? "row-play liked" : "row-play"} title={entry.favourite ? `Remove ${entry.track.title} from favourites` : `Add ${entry.track.title} to favourites`}
               aria-label={entry.favourite ? `Remove ${entry.track.title} from favourites` : `Add ${entry.track.title} to favourites`} onClick={() => void toggleFavourite(entry.track)}><Heart /></button>
+            <button className="row-play" title={`Delete ${entry.track.title}`}
+              aria-label={`Delete ${entry.track.title} from library`} onClick={() => void removeTrack(entry)}><Trash2 /></button>
           </li>)}</ol>
       </section>}
 
@@ -821,9 +837,9 @@ export function App({ settings = settingsStore }: { settings?: SettingsStore }) 
                   onClick={() => void downloadPlaylist(entry.playlist)}><Download /></button>}
               <button className="row-play" title={`Open playlist ${entry.playlist.title}`} aria-label={`Open playlist ${entry.playlist.title}`}
                 onClick={() => openSavedPlaylist(entry.playlist)}><ListMusic /></button>
-              <button className="row-play liked" title={`Remove playlist ${entry.playlist.title} from favourites`}
+              <button className="row-play" title={`Remove playlist ${entry.playlist.title} from favourites`}
                 aria-label={`Remove playlist ${entry.playlist.title} from favourites`}
-                onClick={() => void togglePlaylistFavourite(entry.playlist)}><Heart /></button>
+                onClick={() => void togglePlaylistFavourite(entry.playlist)}><Trash2 /></button>
             </li>)}</ol>
         </section>}
 

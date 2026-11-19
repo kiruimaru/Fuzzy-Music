@@ -103,6 +103,19 @@ pub struct ArtistTracksResponse {
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct RelatedTracksRequest {
+    pub source: Source,
+    pub track_id: String,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RelatedTracksResponse {
+    pub tracks: Vec<Track>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SearchTracksResponse {
     pub tracks: Vec<Track>,
     pub next_page_token: Option<String>,
@@ -371,6 +384,29 @@ impl Application {
             tracks: result.tracks.into_iter().map(Track::from).collect(),
             albums: result.albums.into_iter().map(Playlist::from).collect(),
             playlists: result.playlists.into_iter().map(Playlist::from).collect(),
+        })
+    }
+
+    pub fn related_tracks(
+        &self,
+        request: RelatedTracksRequest,
+        options: &RequestOptions,
+    ) -> Result<RelatedTracksResponse, AppError> {
+        let tracks = match request.source {
+            Source::Soundcloud => {
+                self.soundcloud
+                    .related_tracks_with_options(&request.track_id, 25, options)?
+            }
+            Source::Local => {
+                return Err(AppError {
+                    code: ErrorCode::InvalidInput,
+                    message: "Radio needs a SoundCloud track.".into(),
+                    retryable: false,
+                });
+            }
+        };
+        Ok(RelatedTracksResponse {
+            tracks: tracks.into_iter().map(Track::from).collect(),
         })
     }
 }

@@ -977,4 +977,11 @@ the minimal Tauri shell.
 - mpv now writes a bounded session log to the app data directory (`mpv.log`, truncated above 2 MB) for field diagnostics of playback failures.
 - Verification: frontend 38 tests passed; Rust workspace 62 passed, 4 ignored; rustfmt and strict clippy clean; Tauri debug build passed (CSS 21.50 kB, JS 273.67 kB).
 
+## 2026-11-19 — Track radio
+
+- SoundCloud track rows in search, artist pages, playlists, Favourites and the library gained a radio action; local rows do not show it. The seed plays immediately and the queue is extended with related tracks from the web API, deduplicated by source and id.
+- While radio is active, the client requests another page of related tracks for the last queued entry whenever fewer than five tracks remain, resetting the retry timer after a successful append and waiting twenty seconds after an empty or failed page.
+- Radio ends on another list, a session-queue selection or Stop; requests carry their own generation and are cancelled when radio ends. The endpoint, id validation and local-source rejection are covered by tests.
+- Verification: frontend 40 tests passed; Rust workspace 63 passed, 4 ignored; rustfmt and strict clippy clean; Tauri debug build passed (CSS 21.52 kB, JS 275.82 kB).
+
 

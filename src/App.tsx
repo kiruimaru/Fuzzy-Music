@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { api, backgroundUrl, safeMessage, type ArtistTracks, type LibraryEntry, type Playlist, type PlaylistEntry, type Track } from "./api";
-import { Download, FolderOpen, Heart, ListMusic, ListPlus, RefreshCw, RotateCcw, SkipBack, SkipForward, Trash2, Volume2, X } from "lucide-react";
+import { Download, FolderOpen, Heart, ListMusic, ListPlus, Radio, RefreshCw, RotateCcw, SkipBack, SkipForward, Trash2, Volume2, X } from "lucide-react";
 import { settingsStore, validVolume, type AppSettings, type SettingsStore } from "./settings";
 import blackMascot from "./assets/black.png";
 import soundcloudIcon from "./assets/soundcloud.png";
@@ -148,6 +148,10 @@ export function App({ settings = settingsStore }: { settings?: SettingsStore }) 
   const lookaheadKey = useRef("");
   const lookaheadTime = useRef(0);
   const lookaheadPending = useRef(false);
+  const radioGeneration = useRef(generationBase);
+  const radioMode = useRef(false);
+  const radioPending = useRef(false);
+  const radioAttempt = useRef(0);
   const [sessionQueue, setSessionQueue] = useState<QueueEntry[]>([]);
   const sessionQueueRef = useRef<QueueEntry[]>([]);
   const entryKey = useRef(0);
@@ -329,6 +333,32 @@ export function App({ settings = settingsStore }: { settings?: SettingsStore }) 
                 }
               });
             }
+            // Radio keeps itself going: top the queue up with tracks related to
+            // its last entry while only a few songs remain.
+            const remainingTracks = queueRef.current.length - indexRef.current - 1;
+            if (radioMode.current && status.state === "playing" && !radioPending.current &&
+                remainingTracks <= 4 && Date.now() - radioAttempt.current >= 20000) {
+              const seed = queueRef.current[queueRef.current.length - 1];
+              if (seed) {
+                radioAttempt.current = Date.now();
+                radioPending.current = true;
+                const current = ++radioGeneration.current;
+                void api.relatedTracks(current, seed).then(response => {
+                  if (current !== radioGeneration.current || !radioMode.current) return;
+                  const known = new Set(queueRef.current.map(track => `${track.source}:${track.id}`));
+                  const extra = response.tracks.filter(track => !known.has(`${track.source}:${track.id}`));
+                  if (extra.length) {
+                    queueRef.current = [...queueRef.current, ...extra];
+                    setQueue(queueRef.current);
+                    radioAttempt.current = 0;
+                  }
+                }).catch(() => {
+                  // Keep the current queue; a later cycle retries the radio.
+                }).finally(() => {
+                  if (current === radioGeneration.current) radioPending.current = false;
+                });
+              }
+            }
           }
           if (status.state === "stopped" && autoAdvance.current) {
             const nextIndex = indexRef.current + 1;
@@ -355,6 +385,7 @@ export function App({ settings = settingsStore }: { settings?: SettingsStore }) 
       void api.cancelSearch(++searchGeneration.current).catch(() => {});
       void api.cancelPlaylists(++playlistGeneration.current).catch(() => {});
       void api.cancelArtists(++artistGeneration.current).catch(() => {});
+      void api.cancelRelated(++radioGeneration.current).catch(() => {});
       void api.stop(++playbackGeneration.current).catch(() => {});
       void api.cancelPreparation(++prepareGeneration.current).catch(() => {});
     };
@@ -535,6 +566,9 @@ export function App({ settings = settingsStore }: { settings?: SettingsStore }) 
     ++lookaheadGeneration.current;
     lookaheadPending.current = false;
     lookaheadKey.current = "";
+    radioMode.current = false;
+    radioPending.current = false;
+    void api.cancelRelated(++radioGeneration.current).catch(() => {});
     void api.cancelPreparation(++prepareGeneration.current).catch(() => {});
     const generation = ++playbackGeneration.current;
     resolving.current = false;
@@ -564,6 +598,9 @@ export function App({ settings = settingsStore }: { settings?: SettingsStore }) 
     ++lookaheadGeneration.current;
     lookaheadPending.current = false;
     lookaheadKey.current = "";
+    ++radioGeneration.current;
+    radioMode.current = false;
+    radioPending.current = false;
     playbackOrigin.current = "playlist";
     queueRef.current = [...list];
     indexRef.current = startIndex;
@@ -571,6 +608,36 @@ export function App({ settings = settingsStore }: { settings?: SettingsStore }) 
     setQueueIndex(startIndex);
     autoAdvance.current = true;
     void play(list[startIndex], true);
+  }
+
+  /// Start the seed track immediately, then extend the queue with its related
+  /// tracks and keep extending it as playback approaches the queue end.
+  async function startRadio(track: Track) {
+    if (!settingsReady || track.source !== "soundcloud") return;
+    playList([track]);
+    if (playbackOrigin.current !== "playlist") return;
+    radioMode.current = true;
+    radioPending.current = false;
+    radioAttempt.current = Date.now();
+    const generation = ++radioGeneration.current;
+    radioPending.current = true;
+    try {
+      const response = await api.relatedTracks(generation, track);
+      if (generation !== radioGeneration.current || !radioMode.current) return;
+      const known = new Set(queueRef.current.map(item => `${item.source}:${item.id}`));
+      const extra = response.tracks.filter(item => !known.has(`${item.source}:${item.id}`));
+      if (extra.length) {
+        queueRef.current = [...queueRef.current, ...extra];
+        setQueue(queueRef.current);
+        radioAttempt.current = 0;
+      }
+    } catch {
+      if (generation === radioGeneration.current) {
+        setPlayError("Radio could not load similar tracks. Try again.");
+      }
+    } finally {
+      if (generation === radioGeneration.current) radioPending.current = false;
+    }
   }
 
   function addToQueue(track: Track) {
@@ -588,6 +655,9 @@ export function App({ settings = settingsStore }: { settings?: SettingsStore }) 
     if (!settingsReady) return;
     const index = sessionQueueRef.current.findIndex(entry => entry.key === key);
     if (index < 0) return;
+    ++radioGeneration.current;
+    radioMode.current = false;
+    radioPending.current = false;
     playbackOrigin.current = "session";
     queueRef.current = sessionQueueRef.current.map(entry => entry.track);
     indexRef.current = index;
@@ -839,6 +909,9 @@ export function App({ settings = settingsStore }: { settings?: SettingsStore }) 
           </div>
           <SourceIcon track={track} />
           <span className="row-duration">{track.durationMs === null ? "--:--" : time(track.durationMs)}</span>
+          <button className="row-play" disabled={!settingsReady || track.source !== "soundcloud"}
+            title={`Start radio from ${track.title}`} aria-label={`Start radio from ${track.title}`}
+            onClick={() => void startRadio(track)}><Radio /></button>
           <button className={liked ? "row-play liked" : "row-play"}
             title={liked ? `Remove ${track.title} from favourites` : `Favourite ${track.title}`}
             aria-label={liked ? `Remove ${track.title} from favourites` : `Favourite ${track.title}`}
@@ -983,6 +1056,8 @@ export function App({ settings = settingsStore }: { settings?: SettingsStore }) 
               <button className="row-play" title={`Retry ${entry.track.title}`} aria-label={`Retry ${entry.track.title}`} onClick={() => void api.retryDownload(entry.id).then(refreshLibrary).catch(() => setLibraryError("Could not retry download."))}><RefreshCw /></button>}
             <button className="row-play" title={`Add ${entry.track.title} to queue`} aria-label={`Add ${entry.track.title} to queue`} onClick={() => addToQueue(entry.track)}><ListPlus /></button>
             <button className="row-play" title={`Play ${entry.track.title}`} aria-label={`Play ${entry.track.title}`} disabled={!settingsReady} onClick={() => playList(libraryTracks, index)}><PlayIcon /></button>
+            {entry.track.source === "soundcloud" && <button className="row-play" title={`Start radio from ${entry.track.title}`}
+              aria-label={`Start radio from ${entry.track.title}`} disabled={!settingsReady} onClick={() => void startRadio(entry.track)}><Radio /></button>}
             <button className={entry.favourite ? "row-play liked" : "row-play"} title={entry.favourite ? `Remove ${entry.track.title} from favourites` : `Add ${entry.track.title} to favourites`}
               aria-label={entry.favourite ? `Remove ${entry.track.title} from favourites` : `Add ${entry.track.title} to favourites`} onClick={() => void toggleFavourite(entry.track)}><Heart /></button>
             <button className="row-play" title={`Delete ${entry.track.title}`}
@@ -1118,14 +1193,14 @@ export function App({ settings = settingsStore }: { settings?: SettingsStore }) 
 
       {(view === "tracks" || view === "playlists") && (!openArtist || openPlaylist) && tracks.length > 0 &&
         <section aria-label="Search results" className="results">
-          <div className="results-head"><span>#</span><span /><span>Title</span><span /><span>Time</span><span /><span /><span /></div>
+          <div className="results-head"><span>#</span><span /><span>Title</span><span /><span>Time</span><span /><span /><span /><span /></div>
           {trackRows(tracks)}
         </section>}
 
       {view === "tracks" && openArtist && !openPlaylist && artistTab === "tracks" && openArtist.tracks.length > 0 &&
         <section aria-label="Artist tracks" className="results">
           <div className="artist-tracks-heading"><h3>Tracks</h3><span>{openArtist.tracks.length} {openArtist.tracks.length === 1 ? "track" : "tracks"}</span></div>
-          <div className="results-head"><span>#</span><span /><span>Title</span><span /><span>Time</span><span /><span /><span /></div>
+          <div className="results-head"><span>#</span><span /><span>Title</span><span /><span>Time</span><span /><span /><span /><span /></div>
           {trackRows(openArtist.tracks)}
         </section>}
       {view === "tracks" && openArtist && !openPlaylist && artistTab === "tracks" && openArtist.tracks.length === 0 &&

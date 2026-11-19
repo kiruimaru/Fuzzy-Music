@@ -1001,7 +1001,9 @@ export function App({ settings = settingsStore }: { settings?: SettingsStore }) 
           <button className="icon-btn" disabled={!active || controlling}
             aria-label={playback === "paused" ? "Resume" : "Pause"}
             onClick={() => void control(generation => api.pause(generation, playback !== "paused"))}>
-            {playback === "paused" ? <PlayIcon /> : <PauseIcon />}
+            <span className="icon-swap" key={playback === "paused" ? "play" : "pause"} aria-hidden="true">
+              {playback === "paused" ? <PlayIcon /> : <PauseIcon />}
+            </span>
           </button>
           <button className="icon-btn" onClick={() => void stop()} disabled={playback === "stopping"} aria-label="Stop">
             <StopIcon />
@@ -1061,7 +1063,7 @@ export function App({ settings = settingsStore }: { settings?: SettingsStore }) 
         </div>
       </div>
 
-      <div className="now-playing">
+      <div className="now-playing" key={selected?.sourceUrl ?? "empty"}>
         <Artwork track={selected} size="small" />
         <div className="now-text"><strong>{selected ? selected.title : "No track selected"}</strong>
           <span>{selected ? artistLink(selected.author, artistUrlOf(selected), "artist-link inline") : "Search to begin"}</span></div>

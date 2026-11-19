@@ -963,4 +963,10 @@ the minimal Tauri shell.
 - Settings offers choose/remove actions, a small preview, and a live opacity slider. The slider updates the `--bg-image`/`--bg-opacity` variables on every input event and persists 300 ms after the drag settles; the background layer sits behind the app root.
 - Verification: frontend 38 tests passed; Rust shell tests 35 passed, 3 ignored; rustfmt clean; TypeScript/Vite build and Tauri debug build passed.
 
+## 2026-11-19 — Frosted shell around the custom background
+
+- A set background now also shows through the shell: the root gains `has-background`, the sidebar and player bar switch to translucent tones with a 24 px blurred, slightly saturated backdrop, and light theme keeps its own glass colours. Without a background the original opaque surfaces are untouched.
+- GIF files were already copied untranscoded and can animate as the background; the settings hint now names the supported formats, including animated GIF.
+- Verification: frontend 38 tests passed (background test also asserts the shell class); TypeScript/Vite build and Tauri debug build passed; CSS 21.10 kB (4.82 kB gzip), JS 273.26 kB.
+
 

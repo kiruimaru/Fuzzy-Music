@@ -47,6 +47,21 @@ body::before {
   opacity: var(--bg-opacity, 0%);
 }
 
+/* A custom background turns the shell surfaces into frosted glass so the
+   artwork stays visible behind the sidebar and the player bar. */
+:root.has-background .sidebar {
+  background: rgb(14 17 24 / 58%);
+  backdrop-filter: blur(24px) saturate(1.25);
+}
+:root.has-background .player {
+  background: rgb(13 16 23 / 66%);
+  backdrop-filter: blur(24px) saturate(1.25);
+}
+:root.has-background .nav-item.active { background: rgb(26 31 43 / 55%); }
+:root[data-theme="light"].has-background .sidebar { background: rgb(229 237 233 / 62%); }
+:root[data-theme="light"].has-background .player { background: rgb(249 251 250 / 72%); }
+:root[data-theme="light"].has-background .nav-item.active { background: rgb(229 236 233 / 70%); }
+
 .sr-only {
   position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
   overflow: hidden; clip-path: inset(50%); white-space: nowrap;

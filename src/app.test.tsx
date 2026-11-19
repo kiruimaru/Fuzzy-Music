@@ -770,12 +770,14 @@ test("background image and opacity are configurable in settings", async () => {
   await screen.findByRole("button", { name: "Choose background image" });
   fireEvent.click(screen.getByRole("button", { name: "Choose background image" }));
   await waitFor(() => expect(document.documentElement.style.getPropertyValue("--bg-image")).toContain("background.png"));
+  expect(document.documentElement.classList.contains("has-background")).toBe(true);
   expect(await settings.getSettings()).toMatchObject({ backgroundImage: "C:/data/background.png" });
   fireEvent.change(screen.getByLabelText("Background opacity"), { target: { value: "35" } });
   await waitFor(() => expect(document.documentElement.style.getPropertyValue("--bg-opacity")).toBe("35%"));
   await waitFor(async () => expect((await settings.getSettings()).backgroundOpacity).toBe(35));
   fireEvent.click(screen.getByRole("button", { name: "Remove background image" }));
   await waitFor(() => expect(document.documentElement.style.getPropertyValue("--bg-image")).toBe("none"));
+  expect(document.documentElement.classList.contains("has-background")).toBe(false);
   expect(api.clearBackground).toHaveBeenCalled();
 });
 

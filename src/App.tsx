@@ -181,6 +181,7 @@ export function App({ settings = settingsStore }: { settings?: SettingsStore }) 
       preferences.backgroundImage ? `url("${backgroundUrl(preferences.backgroundImage)}")` : "none",
     );
     root.style.setProperty("--bg-opacity", `${backgroundOpacity}%`);
+    root.classList.toggle("has-background", Boolean(preferences.backgroundImage));
   }, [preferences.backgroundImage, backgroundOpacity]);
 
   useEffect(() => () => {
@@ -913,7 +914,7 @@ export function App({ settings = settingsStore }: { settings?: SettingsStore }) 
           <option value="light">Light</option>
         </select>
         <h3>Player background</h3>
-        <p className="results-status">Choose any image. Move the slider to set how visible it is; the change applies while you drag.</p>
+        <p className="results-status">Choose any image — PNG, JPEG, WebP, animated GIF, BMP, AVIF or SVG. Move the slider to set how visible it is; the change applies while you drag.</p>
         <div className="background-setting">
           <button className="ghost" onClick={() => void chooseBackground()}>Choose background image</button>
           {preferences.backgroundImage && <button className="ghost" onClick={() => void clearBackground()}>Remove background image</button>}

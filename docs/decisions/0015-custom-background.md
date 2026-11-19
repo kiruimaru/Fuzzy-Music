@@ -31,3 +31,17 @@ settings screen.
 The feature adds no JavaScript dependencies. It enables the `protocol-asset`
 Tauri feature, which brings the `http-range` crate, and loads the image from
 local storage only.
+
+While a background is set, the root element carries a `has-background` class and
+the shell surfaces become frosted glass: the sidebar and the player bar render
+translucent with a blurred, slightly saturated backdrop, so the artwork appears
+continuous behind the navigation and transport instead of stopping at their
+edges. Light theme uses its own translucent tones, and the active navigation
+pill stays readable. Without a background the surfaces keep their original
+opaque colours, so nothing changes for users who leave the feature alone.
+
+GIF files are accepted like any other image: the picker copies the file without
+transcoding, the extension is preserved as `background.gif`, and the asset
+protocol serves it to the CSS layer, which keeps the animation running. The
+settings text lists supported formats explicitly so animated backgrounds are
+discoverable.

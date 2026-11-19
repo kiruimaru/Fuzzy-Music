@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { api, safeMessage, type LibraryEntry, type Playlist, type Track } from "./api";
-import { FolderOpen, Heart, ListMusic, ListPlus, RefreshCw, RotateCcw, SkipBack, SkipForward, Trash2, Volume2, X } from "lucide-react";
+import { api, safeMessage, type LibraryEntry, type Playlist, type PlaylistEntry, type Track } from "./api";
+import { Download, FolderOpen, Heart, ListMusic, ListPlus, RefreshCw, RotateCcw, SkipBack, SkipForward, Trash2, Volume2, X } from "lucide-react";
 import { settingsStore, validVolume, type AppSettings, type SettingsStore } from "./settings";
 import blackMascot from "./assets/black.png";
 import soundcloudIcon from "./assets/soundcloud.png";
@@ -96,6 +96,10 @@ export function App({ settings = settingsStore }: { settings?: SettingsStore }) 
   const volumeSending = useRef(false);
   const [library, setLibrary] = useState<LibraryEntry[]>([]);
   const libraryRef = useRef<LibraryEntry[]>([]);
+  const [savedPlaylists, setSavedPlaylists] = useState<PlaylistEntry[]>([]);
+  const favouritePlaylists = savedPlaylists.filter(entry => entry.favourite);
+  const savedPlaylist = (playlist: Playlist) =>
+    savedPlaylists.find(entry => entry.playlist.sourceUrl === playlist.sourceUrl);
   const [libraryError, setLibraryError] = useState("");
   const [scanning, setScanning] = useState(false);
   const [preferences, setPreferences] = useState<AppSettings>({ volume: 100 });
@@ -120,9 +124,10 @@ export function App({ settings = settingsStore }: { settings?: SettingsStore }) 
 
   async function refreshLibrary() {
     try {
-      const entries = await api.library();
+      const [entries, playlists] = await Promise.all([api.library(), api.playlistEntries()]);
       libraryRef.current = entries;
       setLibrary(entries);
+      setSavedPlaylists(playlists);
       setLibraryError("");
     } catch { setLibraryError("Could not load the music library."); }
   }
@@ -545,6 +550,30 @@ export function App({ settings = settingsStore }: { settings?: SettingsStore }) 
     } catch { setLibraryError("Could not update favourites."); }
   }
 
+  async function togglePlaylistFavourite(playlist: Playlist) {
+    try {
+      await api.favouritePlaylist(playlist, !savedPlaylist(playlist)?.favourite);
+      await refreshLibrary();
+    } catch { setLibraryError("Could not update favourite playlists."); }
+  }
+
+  async function downloadPlaylist(playlist: Playlist) {
+    try {
+      await api.downloadPlaylist(playlist);
+      await refreshLibrary();
+    } catch (error) { setLibraryError(safeMessage(error)); }
+  }
+
+  function openSavedPlaylist(playlist: Playlist) {
+    setView("playlists");
+    setOpenPlaylist(null);
+    setSearchState("idle");
+    setSearchError("");
+    setTracks([]);
+    setPlaylists([]);
+    void openPlaylistTracks(playlist);
+  }
+
   const statusText =
     playback === "resolving" ? "Resolving..." :
     playback === "starting" ? "Starting audio..." :
@@ -553,6 +582,8 @@ export function App({ settings = settingsStore }: { settings?: SettingsStore }) 
     playback === "stopping" ? "Stopping..." :
     playback === "stopped" ? "Stopped" :
     playback === "error" ? playError : "Idle";
+
+  const currentSavedPlaylist = openPlaylist ? savedPlaylist(openPlaylist.playlist) : undefined;
 
   return <div className="app">
     <aside className="sidebar" aria-label="Navigation">
@@ -650,19 +681,51 @@ export function App({ settings = settingsStore }: { settings?: SettingsStore }) 
           </li>)}</ol>
       </section>}
 
+      {view === "favourites" && favouritePlaylists.length > 0 &&
+        <section className="session-queue" aria-label="Favourite playlists">
+          <div className="library-heading"><h2>Favourite playlists</h2></div>
+          <ol className="playlist-rows">{favouritePlaylists.map(entry =>
+            <li key={entry.id}>
+              {entry.playlist.artworkUrl
+                ? <img className="artwork artwork-small" src={entry.playlist.artworkUrl} alt="" loading="lazy" />
+                : <div className="artwork artwork-small artwork-fallback" aria-hidden="true">♪</div>}
+              <div className="row-text"><strong>{entry.playlist.title}</strong><span>{entry.playlist.author} · {
+                entry.state === "ready" ? `Downloaded · ${entry.total} ${entry.total === 1 ? "track" : "tracks"}` :
+                entry.total > 0 ? `${entry.downloaded} of ${entry.total} downloaded` :
+                entry.playlist.trackCount === null ? "Playlist" : `${entry.playlist.trackCount} ${entry.playlist.trackCount === 1 ? "track" : "tracks"}`
+              }</span></div>
+              {entry.state !== "ready" && entry.state !== "downloading" &&
+                <button className="row-play" title={`Download playlist ${entry.playlist.title}`} aria-label={`Download playlist ${entry.playlist.title}`}
+                  onClick={() => void downloadPlaylist(entry.playlist)}><Download /></button>}
+              <button className="row-play" title={`Open playlist ${entry.playlist.title}`} aria-label={`Open playlist ${entry.playlist.title}`}
+                onClick={() => openSavedPlaylist(entry.playlist)}><ListMusic /></button>
+              <button className="row-play liked" title={`Remove playlist ${entry.playlist.title} from favourites`}
+                aria-label={`Remove playlist ${entry.playlist.title} from favourites`}
+                onClick={() => void togglePlaylistFavourite(entry.playlist)}><Heart /></button>
+            </li>)}</ol>
+        </section>}
+
       {view === "playlists" && !openPlaylist &&
         <section aria-label="Playlist results" className="playlist-grid">
-          {playlists.map(playlist => <button key={playlist.id} className="playlist-card"
-            onClick={() => void openPlaylistTracks(playlist)} aria-label={`Open playlist ${playlist.title}`}>
-            {playlist.artworkUrl
-              ? <img className="playlist-cover" src={playlist.artworkUrl} alt="" loading="lazy" />
-              : <div className="playlist-cover artwork-fallback" aria-hidden="true">♪</div>}
-            <strong>{playlist.title}</strong>
-            <span>{playlist.author}</span>
-            <span className="playlist-meta">
-              {playlist.trackCount === null ? "Playlist" : `${playlist.trackCount} ${playlist.trackCount === 1 ? "track" : "tracks"}`}
-            </span>
-          </button>)}
+          {playlists.map(playlist => {
+            const saved = savedPlaylist(playlist);
+            return <div key={playlist.id} className="playlist-card-wrap">
+              <button className="playlist-card" onClick={() => void openPlaylistTracks(playlist)} aria-label={`Open playlist ${playlist.title}`}>
+                {playlist.artworkUrl
+                  ? <img className="playlist-cover" src={playlist.artworkUrl} alt="" loading="lazy" />
+                  : <div className="playlist-cover artwork-fallback" aria-hidden="true">♪</div>}
+                <strong>{playlist.title}</strong>
+                <span>{playlist.author}</span>
+                <span className="playlist-meta">
+                  {playlist.trackCount === null ? "Playlist" : `${playlist.trackCount} ${playlist.trackCount === 1 ? "track" : "tracks"}`}
+                </span>
+              </button>
+              <button className={saved?.favourite ? "row-play liked playlist-card-like" : "row-play playlist-card-like"}
+                title={saved?.favourite ? `Remove playlist ${playlist.title} from favourites` : `Favourite playlist ${playlist.title}`}
+                aria-label={saved?.favourite ? `Remove playlist ${playlist.title} from favourites` : `Favourite playlist ${playlist.title}`}
+                onClick={() => void togglePlaylistFavourite(playlist)}><Heart /></button>
+            </div>;
+          })}
         </section>}
 
       {view === "playlists" && !openPlaylist && playlistLoading && <p className="results-status">Loading playlist...</p>}
@@ -694,7 +757,18 @@ export function App({ settings = settingsStore }: { settings?: SettingsStore }) 
                 </p>}
             </div>
           </div>
-          <button className="primary" onClick={() => playPlaylist() } disabled={!tracks.length || !settingsReady}>Play playlist</button>
+          <div className="playlist-actions">
+            <button className="primary" onClick={() => playPlaylist() } disabled={!tracks.length || !settingsReady}>Play playlist</button>
+            <button className={currentSavedPlaylist?.favourite ? "ghost small liked" : "ghost small"}
+              title={currentSavedPlaylist?.favourite ? `Remove playlist ${openPlaylist.playlist.title} from favourites` : `Favourite playlist ${openPlaylist.playlist.title}`}
+              aria-label={currentSavedPlaylist?.favourite ? `Remove playlist ${openPlaylist.playlist.title} from favourites` : `Favourite playlist ${openPlaylist.playlist.title}`}
+              onClick={() => void togglePlaylistFavourite(openPlaylist.playlist)}><Heart /></button>
+            <button className="ghost small" disabled={!tracks.length || currentSavedPlaylist?.state === "downloading"}
+              title={`Download playlist ${openPlaylist.playlist.title}`} aria-label={`Download playlist ${openPlaylist.playlist.title}`}
+              onClick={() => void downloadPlaylist(openPlaylist.playlist)}><Download /></button>
+            {currentSavedPlaylist && currentSavedPlaylist.total > 0 &&
+              <span className="playlist-by">{currentSavedPlaylist.state === "ready" ? "Available offline" : `${currentSavedPlaylist.downloaded} of ${currentSavedPlaylist.total} downloaded`}</span>}
+          </div>
         </section>}
 
       {(view === "tracks" || view === "playlists") && tracks.length > 0 &&

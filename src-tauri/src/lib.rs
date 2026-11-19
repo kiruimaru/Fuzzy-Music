@@ -539,6 +539,49 @@ async fn set_favourite(
 }
 
 #[tauri::command]
+async fn playlist_entries(
+    library: tauri::State<'_, LibraryState>,
+) -> Result<Vec<library::PlaylistEntry>, AppError> {
+    let library = library.get()?;
+    worker(move || library.library.playlists()).await
+}
+
+#[tauri::command]
+async fn set_playlist_favourite(
+    library: tauri::State<'_, LibraryState>,
+    playlist: fuzzy_application::Playlist,
+    liked: bool,
+) -> Result<(), AppError> {
+    let library = library.get()?;
+    worker(move || library.set_playlist_favourite(playlist, liked)).await
+}
+
+#[tauri::command]
+async fn download_playlist(
+    shell: tauri::State<'_, Arc<Shell>>,
+    library: tauri::State<'_, LibraryState>,
+    playlist: fuzzy_application::Playlist,
+) -> Result<(), AppError> {
+    let shell = shell.inner().clone();
+    let library = library.get()?;
+    worker(move || {
+        let options = RequestOptions {
+            timeout: std::time::Duration::from_secs(180),
+            cancellation: CancellationToken::default(),
+        };
+        let response = shell.application.playlist_tracks(
+            PlaylistTracksRequest {
+                source: playlist.source.clone(),
+                playlist_url: playlist.source_url.clone(),
+            },
+            &options,
+        )?;
+        library.download_playlist(response.playlist, response.tracks)
+    })
+    .await
+}
+
+#[tauri::command]
 async fn retry_download(library: tauri::State<'_, LibraryState>, id: i64) -> Result<(), AppError> {
     let library = library.get()?;
     worker(move || library.enqueue(id)).await
@@ -1023,6 +1066,9 @@ pub fn run() {
             library_entries,
             scan_library,
             set_favourite,
+            playlist_entries,
+            set_playlist_favourite,
+            download_playlist,
             retry_download,
             play_library_track,
             choose_music_folder,

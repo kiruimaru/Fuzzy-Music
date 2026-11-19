@@ -756,3 +756,12 @@ the minimal Tauri shell.
 - Updated the freshness boundary test to straddle the new 3300-second cap; decision recorded in `docs/decisions/0008-lookahead-resource-limits.md`.
 - Verification: cargo fmt clean; `cargo test --workspace --all-targets --locked` all passed; frontend untouched.
 
+## 2026-11-19 — Playlist bookmarks
+
+- Added bookmarked SoundCloud playlists in SQLite schema v3 (`playlists` and `playlist_tracks`), independent of track favourites and storing no signed URLs or audio.
+- Liking a playlist starts no downloads; an explicit Download action resolves the track list through the application boundary and queues tracks through the existing single download worker (queue capacity 1024, 1000-track request cap, duplicates collapsed by source id).
+- Playlist rows survive unliking so downloads keep their association; downloaded playlist tracks appear in the music library, and Favourites shows per-playlist progress.
+- UI adds hearts on playlist cards and the playlist header, a Favourite playlists section and open/download actions; work is stacked on PR #25 and recorded in `docs/decisions/0011-playlist-favourites.md`.
+- Verification: cargo fmt clean; workspace tests 54 passed and 4 ignored; frontend 32 tests; TypeScript/Vite build passed.
+
+

@@ -49,10 +49,23 @@ export type LibraryEntry = {
   availableOffline: boolean;
 };
 
+export type PlaylistEntry = {
+  id: number;
+  playlist: Playlist;
+  favourite: boolean;
+  downloaded: number;
+  total: number;
+  state: "idle" | "downloading" | "ready" | "error";
+};
+
 export const api = {
   library: () => invoke<LibraryEntry[]>("library_entries"),
   scanLibrary: () => invoke<{ imported: number; skipped: number; truncated: boolean }>("scan_library"),
   favourite: (track: Track, liked: boolean) => invoke<void>("set_favourite", { track, liked }),
+  playlistEntries: () => invoke<PlaylistEntry[]>("playlist_entries"),
+  favouritePlaylist: (playlist: Playlist, liked: boolean) =>
+    invoke<void>("set_playlist_favourite", { playlist, liked }),
+  downloadPlaylist: (playlist: Playlist) => invoke<void>("download_playlist", { playlist }),
   retryDownload: (id: number) => invoke<void>("retry_download", { id }),
   chooseFolder: () => invoke<string | null>("choose_music_folder"),
   playLibrary: (generation: number, id: number, volume: number) =>

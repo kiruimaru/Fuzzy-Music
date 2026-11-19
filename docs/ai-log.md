@@ -795,4 +795,11 @@ the minimal Tauri shell.
 - A download that finishes after its media row was deleted now removes its own persisted file instead of leaving an orphan.
 - Verification: fixture-backed Rust test covers file and playlist-membership removal; workspace tests 59 passed and 4 ignored; frontend 36 tests; clippy clean; Tauri debug build passed.
 
+## 2026-11-19 — Artist catalog sections
+
+- Artist pages now load the artist's public sets from api-v2 alongside their tracks. Sets flagged `is_album` are listed under Albums; the rest under Playlists, so the catalog is separated into Tracks, Albums and Playlists tabs with counts.
+- The artist hero summarizes all three counts and keeps Play artist bound to the track list. Album and playlist cards reuse the playlist card layout, open through the existing playlist view and keep favourite toggles. Leaving a playlist opened from an artist returns to the artist page.
+- Artist playlist parsing accepts bare arrays and collection responses and drops entries without a valid SoundCloud set URL. Only the first 50 tracks and 50 sets are loaded per artist in this iteration.
+- Verification: workspace tests 60 passed and 4 ignored; frontend 37 tests; clippy and rustfmt clean; Tauri debug build passed.
+
 

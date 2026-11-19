@@ -37,7 +37,8 @@ bookmarked like tracks; a bookmark appears in Favourites and plays online until
 the user explicitly downloads the whole playlist for offline use. See decision
 0011. Artist names everywhere — track rows, playlist cards and headers, the
 queue and the now-playing panel — open the artist's public page inside the app,
-which uses a dedicated banner layout rather than the playlist header. Play
+which uses a dedicated banner layout rather than the playlist header and
+separates the catalog into Tracks, Albums and Playlists tabs with counts. Play
 starts their list so the next track follows automatically, and the same list
 behavior applies to search results, playlists, Favourites and the music library.
 See decision 0012. Integration checks and accepted review follow-ups

@@ -51,6 +51,8 @@ export type Artist = {
 export type ArtistTracks = {
   artist: Artist;
   tracks: Track[];
+  albums: Playlist[];
+  playlists: Playlist[];
 };
 
 export type LibraryEntry = {

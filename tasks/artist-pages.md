@@ -10,13 +10,14 @@ without manual switching, and make every visible track list auto-advance.
 ### In scope
 
 - Resolve an artist URL through the SoundCloud web API and list their public tracks.
+- Load the artist's public sets and separate albums from playlists for a structured page.
 - Link artist names in track rows; add an artist view with Play artist and Back to search.
 - Play any clicked row together with its visible list so the next track starts automatically.
 - Apply the same list behavior to search results, playlists, Favourites and the music library.
 
 ### Out of scope
 
-- Artist pagination beyond the first 50 tracks.
+- Artist pagination beyond the first 50 tracks and 50 sets.
 - Following artists, artist likes/reposts or account features.
 - Provider work beyond public SoundCloud.
 
@@ -40,23 +41,27 @@ without manual switching, and make every visible track list auto-advance.
 ### Completed
 
 - `Artist`/`ArtistTracks` in the SoundCloud crate, `/resolve` + `/users/{id}/tracks`
-  loading with array and collection response shapes.
+  loading with array and collection response shapes, and `/users/{id}/playlists`
+  split into albums (`is_album`) and playlists.
 - Artist URL validation rejects track, playlist, query and non-HTTPS URLs before
   any network access.
-- Application DTOs `Artist`, `ArtistTracksRequest`, `ArtistTracksResponse`;
-  commands `artist_tracks` and `cancel_artists` with generation-scoped cancellation.
-- Artist names are links in track rows; the artist view reuses playlist header
-  styling and keeps search results for Back to search.
+- Application DTOs `Artist`, `ArtistTracksRequest`, `ArtistTracksResponse` with
+  albums and playlists; commands `artist_tracks` and `cancel_artists` with
+  generation-scoped cancellation.
+- Artist names are links in track rows; the artist view has a dedicated banner,
+  a Tracks/Albums/Playlists tab bar with counts and keeps search results for
+  Back to search. Album and playlist cards open in the playlist view and return
+  to the artist page.
 - Row playback uses one list queue, so search results, artist pages, playlists,
   Favourites and the music library auto-advance through the existing transition
   machinery.
-- Tests: artist URL validation, artist metadata/track parsing, frontend artist
-  navigation and auto-advance, existing suite unchanged.
+- Tests: artist URL validation, artist metadata/track/playlist parsing, frontend
+  artist navigation, tab separation and auto-advance, existing suite unchanged.
 
 ### Remaining
 
 - Manual GUI acceptance against real SoundCloud through the user's proxy.
-- Pagination for artists with more than 50 tracks (future work).
+- Pagination for artists with more than 50 tracks or sets (future work).
 
 ## Verification
 
@@ -66,9 +71,9 @@ Commands and results:
 cargo fmt --all
 clean
 cargo test --workspace --all-targets --locked
-58 passed, 4 ignored
+60 passed, 4 ignored
 npm test
-34 passed
+37 passed
 cargo clippy --workspace --all-targets --locked -- -D warnings
 clean
 npm run tauri -- build --debug --no-bundle
@@ -80,7 +85,7 @@ build passed
 - Current branch: `feat/artist-pages` (based on `feat/playlist-favourites`).
 - Files changed: SoundCloud client and web transport; application DTOs; shell
   commands; API bindings; App view, rows and styles; tests; docs.
-- Known risks: artist track lists are capped at 50; the artist view reuses the
-  playlist hero styles; list playback now depends on the playlist transition path
-  for every list, including local library tracks.
+- Known risks: artist track and set lists are capped at 50 each; list playback now
+  depends on the playlist transition path for every list, including local library
+  tracks.
 - Next action: manual Windows GUI check, then review and publishing decision.

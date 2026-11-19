@@ -220,6 +220,9 @@ struct PlaylistJson {
     track_count: Option<i64>,
     duration: Option<f64>,
     user: Option<User>,
+    // Albums are playlists too; the flag separates them in artist views.
+    #[serde(default)]
+    is_album: bool,
 }
 
 #[derive(Deserialize)]
@@ -348,6 +351,38 @@ fn track_collection(value: serde_json::Value) -> Result<Vec<TrackJson>, SoundClo
         })
 }
 
+/// Artist playlists arrive either as a bare array or as `{collection: [...]}`.
+/// Albums (`is_album`) are split from user-created sets for the artist page.
+fn playlist_collection(
+    value: serde_json::Value,
+) -> Result<(Vec<Playlist>, Vec<Playlist>), SoundCloudError> {
+    #[derive(Deserialize)]
+    struct Response {
+        #[serde(default)]
+        collection: Vec<PlaylistJson>,
+    }
+    let entries = serde_json::from_value::<Vec<PlaylistJson>>(value.clone())
+        .or_else(|_| serde_json::from_value::<Response>(value).map(|response| response.collection))
+        .map_err(|_| {
+            SoundCloudError::InvalidResponse(
+                "SoundCloud returned unexpected artist playlists".into(),
+            )
+        })?;
+    let mut albums = Vec::new();
+    let mut playlists = Vec::new();
+    for entry in entries {
+        let album = entry.is_album;
+        if let Some(playlist) = playlist_from_json(entry) {
+            if album {
+                albums.push(playlist);
+            } else {
+                playlists.push(playlist);
+            }
+        }
+    }
+    Ok((albums, playlists))
+}
+
 fn decode(body: &str) -> Result<serde_json::Value, SoundCloudError> {
     serde_json::from_str(body)
         .map_err(|_| SoundCloudError::InvalidResponse("SoundCloud returned invalid JSON".into()))
@@ -474,12 +509,12 @@ pub(crate) fn playlist(
     Ok((playlist, tracks))
 }
 
-/// Load one public artist profile and a page of their tracks.
+/// Load one public artist profile, a page of their tracks and their sets.
 pub(crate) fn artist(
     options: &RequestOptions,
     artist_url: &str,
     network: Option<&crate::network::NetworkPolicy>,
-) -> Result<(Artist, Vec<Track>), SoundCloudError> {
+) -> Result<crate::ArtistTracks, SoundCloudError> {
     check_cancelled(options)?;
     let http = Http::new(options, network)?;
     let path = format!("/resolve?url={}", encode(artist_url));
@@ -508,7 +543,20 @@ pub(crate) fn artist(
         .filter_map(track_from_json)
         .take(50)
         .collect();
-    Ok((artist, tracks))
+    check_cancelled(options)?;
+    let value = api_json(
+        &http,
+        &format!("/users/{}/playlists?limit=50", artist.id),
+        options,
+        false,
+    )?;
+    let (albums, playlists) = playlist_collection(value)?;
+    Ok(crate::ArtistTracks {
+        artist,
+        tracks,
+        albums,
+        playlists,
+    })
 }
 
 pub(crate) fn search_tracks(
@@ -635,5 +683,31 @@ mod tests {
         assert_eq!(track_collection(array).unwrap().len(), 1);
         let collection = serde_json::json!({ "collection": [track] });
         assert_eq!(track_collection(collection).unwrap().len(), 1);
+    }
+
+    #[test]
+    fn artist_playlists_are_split_into_albums_and_sets() {
+        let album = serde_json::json!({
+            "id": 10, "title": "LP", "permalink_url": "https://soundcloud.com/artist/sets/lp",
+            "is_album": true, "track_count": 8, "user": {"username": "Artist"}
+        });
+        let playlist = serde_json::json!({
+            "id": 11, "title": "Mix", "permalink_url": "https://soundcloud.com/artist/sets/mix",
+            "is_album": false, "track_count": 12, "user": {"username": "Artist"}
+        });
+        let (albums, playlists) =
+            playlist_collection(serde_json::json!({ "collection": [album, playlist] })).unwrap();
+        assert_eq!(albums.len(), 1);
+        assert_eq!(albums[0].title, "LP");
+        assert_eq!(playlists.len(), 1);
+        assert_eq!(playlists[0].title, "Mix");
+
+        let bare = serde_json::Value::Array(vec![serde_json::json!({
+            "id": 12, "title": "EP", "permalink_url": "https://soundcloud.com/artist/sets/ep",
+            "is_album": true
+        })]);
+        let (albums, playlists) = playlist_collection(bare).unwrap();
+        assert_eq!(albums.len(), 1);
+        assert!(playlists.is_empty());
     }
 }

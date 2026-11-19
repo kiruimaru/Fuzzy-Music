@@ -127,6 +127,13 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 }
 .tab:hover { color: var(--text); }
 .tab.active { background: var(--panel-2); border-color: var(--line); color: var(--text); font-weight: 600; }
+.artist-tabs { margin-top: 14px; }
+.artist-tabs .tab { display: inline-flex; align-items: center; gap: 7px; }
+.tab-count {
+  padding: 1px 8px; border-radius: 999px; background: var(--panel-2);
+  border: 1px solid var(--line); color: var(--muted); font-size: 12px; font-weight: 500;
+}
+.tab.active .tab-count { color: var(--text); }
 
 .playlist-grid {
   display: grid; gap: 16px;

@@ -74,6 +74,7 @@ export function App({ settings = settingsStore }: { settings?: SettingsStore }) 
   const [openArtist, setOpenArtist] = useState<ArtistTracks | null>(null);
   const [artistLoading, setArtistLoading] = useState(false);
   const [artistError, setArtistError] = useState("");
+  const [artistTab, setArtistTab] = useState<"tracks" | "albums" | "playlists">("tracks");
   const [searchState, setSearchState] = useState("idle");
   const [searchError, setSearchError] = useState("");
   const [playback, setPlayback] = useState("idle");
@@ -371,6 +372,7 @@ export function App({ settings = settingsStore }: { settings?: SettingsStore }) 
     setArtistLoading(true);
     setArtistError("");
     setOpenArtist(null);
+    setArtistTab("tracks");
     try {
       const response = await api.artistTracks(generation, url);
       if (generation !== artistGeneration.current) return;
@@ -718,6 +720,31 @@ export function App({ settings = settingsStore }: { settings?: SettingsStore }) 
     </ul>;
   }
 
+  function playlistCards(list: Playlist[], kind: "playlist" | "album" = "playlist") {
+    return list.map(playlist => {
+      const saved = savedPlaylist(playlist);
+      return <div key={playlist.id} className="playlist-card-wrap">
+        <div className="playlist-card">
+          <button className="playlist-card-open" onClick={() => void openPlaylistTracks(playlist)} aria-label={`Open playlist ${playlist.title}`}>
+            {playlist.artworkUrl
+              ? <img className="playlist-cover" src={playlist.artworkUrl} alt="" loading="lazy" />
+              : <div className="playlist-cover artwork-fallback" aria-hidden="true">♪</div>}
+            <strong>{playlist.title}</strong>
+          </button>
+          {artistLink(playlist.author, soundcloudArtistUrl(playlist.sourceUrl), "artist-link playlist-author")}
+          <span className="playlist-meta">
+            {kind === "album" ? "Album" : "Playlist"}
+            {playlist.trackCount === null ? "" : ` · ${playlist.trackCount} ${playlist.trackCount === 1 ? "track" : "tracks"}`}
+          </span>
+        </div>
+        <button className={saved?.favourite ? "row-play liked playlist-card-like" : "row-play playlist-card-like"}
+          title={saved?.favourite ? `Remove playlist ${playlist.title} from favourites` : `Favourite playlist ${playlist.title}`}
+          aria-label={saved?.favourite ? `Remove playlist ${playlist.title} from favourites` : `Favourite playlist ${playlist.title}`}
+          onClick={() => void togglePlaylistFavourite(playlist)}><Heart /></button>
+      </div>;
+    });
+  }
+
   return <div className="app">
     <aside className="sidebar" aria-label="Navigation">
       <div className="brand"><img className="brand-mark" src={blackMascot} alt="" /><span>Fuzzy Music</span></div>
@@ -845,27 +872,7 @@ export function App({ settings = settingsStore }: { settings?: SettingsStore }) 
 
       {view === "playlists" && !openPlaylist &&
         <section aria-label="Playlist results" className="playlist-grid">
-          {playlists.map(playlist => {
-            const saved = savedPlaylist(playlist);
-            return <div key={playlist.id} className="playlist-card-wrap">
-              <div className="playlist-card">
-                <button className="playlist-card-open" onClick={() => void openPlaylistTracks(playlist)} aria-label={`Open playlist ${playlist.title}`}>
-                  {playlist.artworkUrl
-                    ? <img className="playlist-cover" src={playlist.artworkUrl} alt="" loading="lazy" />
-                    : <div className="playlist-cover artwork-fallback" aria-hidden="true">♪</div>}
-                  <strong>{playlist.title}</strong>
-                </button>
-                {artistLink(playlist.author, soundcloudArtistUrl(playlist.sourceUrl), "artist-link playlist-author")}
-                <span className="playlist-meta">
-                  {playlist.trackCount === null ? "Playlist" : `${playlist.trackCount} ${playlist.trackCount === 1 ? "track" : "tracks"}`}
-                </span>
-              </div>
-              <button className={saved?.favourite ? "row-play liked playlist-card-like" : "row-play playlist-card-like"}
-                title={saved?.favourite ? `Remove playlist ${playlist.title} from favourites` : `Favourite playlist ${playlist.title}`}
-                aria-label={saved?.favourite ? `Remove playlist ${playlist.title} from favourites` : `Favourite playlist ${playlist.title}`}
-                onClick={() => void togglePlaylistFavourite(playlist)}><Heart /></button>
-            </div>;
-          })}
+          {playlistCards(playlists)}
         </section>}
 
       {view === "playlists" && !openPlaylist && playlistLoading && <p className="results-status">Loading playlist...</p>}
@@ -876,7 +883,7 @@ export function App({ settings = settingsStore }: { settings?: SettingsStore }) 
             setOpenPlaylist(null);
             setTracks([]);
             setSearchState(playlists.length ? "ready" : "idle");
-          }}>← Back to playlists</button>
+          }}>← {openArtist ? "Back to artist" : "Back to playlists"}</button>
           <div className="playlist-hero">
             {openPlaylist.playlist.artworkUrl
               ? <img className="playlist-hero-cover" src={openPlaylist.playlist.artworkUrl} alt="" />
@@ -914,9 +921,9 @@ export function App({ settings = settingsStore }: { settings?: SettingsStore }) 
           </div>
         </section>}
 
-      {view === "tracks" && openArtist &&
+      {view === "tracks" && openArtist && !openPlaylist &&
         <section className="artist-page" aria-label="Artist">
-          <button className="ghost small" onClick={() => setOpenArtist(null)}>← Back to search</button>
+          <button className="ghost small" onClick={() => { setOpenArtist(null); setArtistTab("tracks"); }}>← Back to search</button>
           <div className="artist-banner">
             {openArtist.artist.avatarUrl && <img className="artist-backdrop" src={openArtist.artist.avatarUrl} alt="" aria-hidden="true" />}
             {openArtist.artist.avatarUrl
@@ -927,6 +934,8 @@ export function App({ settings = settingsStore }: { settings?: SettingsStore }) 
               <h2>{openArtist.artist.name}</h2>
               <p className="artist-stats">
                 {openArtist.tracks.length} {openArtist.tracks.length === 1 ? "track" : "tracks"}
+                {openArtist.albums.length > 0 ? ` · ${openArtist.albums.length} ${openArtist.albums.length === 1 ? "album" : "albums"}` : ""}
+                {openArtist.playlists.length > 0 ? ` · ${openArtist.playlists.length} ${openArtist.playlists.length === 1 ? "playlist" : "playlists"}` : ""}
                 {openArtist.artist.trackCount !== null && openArtist.artist.trackCount > openArtist.tracks.length
                   ? ` · ${openArtist.artist.trackCount} on SoundCloud` : ""}
               </p>
@@ -934,6 +943,16 @@ export function App({ settings = settingsStore }: { settings?: SettingsStore }) 
                 <button className="primary" onClick={() => playList(openArtist.tracks)} disabled={!openArtist.tracks.length || !settingsReady}>Play artist</button>
               </div>
             </div>
+          </div>
+          <div className="tabs artist-tabs" role="tablist" aria-label="Artist content">
+            <button role="tab" aria-selected={artistTab === "tracks"} className={artistTab === "tracks" ? "tab active" : "tab"}
+              onClick={() => setArtistTab("tracks")}>Tracks<span className="tab-count" aria-hidden="true">{openArtist.tracks.length}</span></button>
+            {openArtist.albums.length > 0 &&
+              <button role="tab" aria-selected={artistTab === "albums"} className={artistTab === "albums" ? "tab active" : "tab"}
+                onClick={() => setArtistTab("albums")}>Albums<span className="tab-count" aria-hidden="true">{openArtist.albums.length}</span></button>}
+            {openArtist.playlists.length > 0 &&
+              <button role="tab" aria-selected={artistTab === "playlists"} className={artistTab === "playlists" ? "tab active" : "tab"}
+                onClick={() => setArtistTab("playlists")}>Playlists<span className="tab-count" aria-hidden="true">{openArtist.playlists.length}</span></button>}
           </div>
         </section>}
 
@@ -946,14 +965,24 @@ export function App({ settings = settingsStore }: { settings?: SettingsStore }) 
           {trackRows(tracks)}
         </section>}
 
-      {view === "tracks" && openArtist && openArtist.tracks.length > 0 &&
+      {view === "tracks" && openArtist && !openPlaylist && artistTab === "tracks" && openArtist.tracks.length > 0 &&
         <section aria-label="Artist tracks" className="results">
           <div className="artist-tracks-heading"><h3>Tracks</h3><span>{openArtist.tracks.length} {openArtist.tracks.length === 1 ? "track" : "tracks"}</span></div>
           <div className="results-head"><span>#</span><span /><span>Title</span><span /><span>Time</span><span /><span /><span /></div>
           {trackRows(openArtist.tracks)}
         </section>}
-      {view === "tracks" && openArtist && openArtist.tracks.length === 0 &&
+      {view === "tracks" && openArtist && !openPlaylist && artistTab === "tracks" && openArtist.tracks.length === 0 &&
         <p className="results-status">No public tracks found.</p>}
+
+      {view === "tracks" && openArtist && !openPlaylist && artistTab === "albums" &&
+        <section aria-label="Artist albums" className="playlist-grid">
+          {playlistCards(openArtist.albums, "album")}
+        </section>}
+
+      {view === "tracks" && openArtist && !openPlaylist && artistTab === "playlists" &&
+        <section aria-label="Artist playlists" className="playlist-grid">
+          {playlistCards(openArtist.playlists)}
+        </section>}
 
       {(view === "tracks" || view === "playlists") && tracks.length === 0 && searchState === "idle" && !openArtist &&
         <section className="empty-state">

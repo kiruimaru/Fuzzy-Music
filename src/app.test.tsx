@@ -760,7 +760,7 @@ test("artist pages open from a track and play their list in order", async () => 
   const second: Track = { ...track, id: "2", title: "Second", sourceUrl: "https://soundcloud.com/artist/second" };
   vi.mocked(api.search).mockResolvedValue({ tracks: [track, second], nextPageToken: null });
   const artist = { id: "5", name: "Artist", avatarUrl: null, trackCount: 2, sourceUrl: "https://soundcloud.com/artist" };
-  vi.mocked(api.artistTracks).mockResolvedValue({ artist, tracks: [track, second] });
+  vi.mocked(api.artistTracks).mockResolvedValue({ artist, tracks: [track, second], albums: [], playlists: [] });
   render(<App settings={createMemorySettingsStore()} />);
   search("music");
   fireEvent.click((await screen.findAllByRole("button", { name: "Open artist Artist" }))[0]);
@@ -785,6 +785,42 @@ test("artist pages open from a track and play their list in order", async () => 
   expect(screen.getByRole("region", { name: "Search results" })).toBeTruthy();
 });
 
+test("artist page separates tracks, albums and playlists", async () => {
+  const album: Playlist = {
+    id: "91", title: "Night LP", author: "Artist", artworkUrl: null, trackCount: 8,
+    durationMs: null, source: "soundcloud", sourceUrl: "https://soundcloud.com/artist/sets/night-lp",
+  };
+  const mix: Playlist = {
+    ...album, id: "92", title: "Radio Mix", trackCount: 12,
+    sourceUrl: "https://soundcloud.com/artist/sets/radio-mix",
+  };
+  const artist = { id: "5", name: "Artist", avatarUrl: null, trackCount: 3, sourceUrl: "https://soundcloud.com/artist" };
+  vi.mocked(api.search).mockResolvedValue({ tracks: [track], nextPageToken: null });
+  vi.mocked(api.artistTracks).mockResolvedValue({ artist, tracks: [track], albums: [album], playlists: [mix] });
+  vi.mocked(api.playlistTracks).mockResolvedValue({ playlist: album, tracks: [track], skippedTrackCount: 0 });
+  render(<App settings={createMemorySettingsStore()} />);
+  search("music");
+  fireEvent.click(await screen.findByRole("button", { name: "Open artist Artist" }));
+  const hero = await screen.findByRole("region", { name: "Artist" });
+  expect(within(hero).getByText(/1 album/)).toBeTruthy();
+  expect(within(hero).getByText(/1 playlist/)).toBeTruthy();
+
+  fireEvent.click(within(hero).getByRole("tab", { name: "Albums" }));
+  const albums = await screen.findByRole("region", { name: "Artist albums" });
+  expect(within(albums).getByText("Night LP")).toBeTruthy();
+  expect(within(albums).queryByText("Radio Mix")).toBeNull();
+  fireEvent.click(within(albums).getByRole("button", { name: "Open playlist Night LP" }));
+  await waitFor(() => expect(api.playlistTracks).toHaveBeenCalledWith(expect.any(Number), album));
+  await screen.findByRole("heading", { name: "Night LP" });
+
+  fireEvent.click(screen.getByRole("button", { name: "← Back to artist" }));
+  const back = await screen.findByRole("region", { name: "Artist" });
+  fireEvent.click(within(back).getByRole("tab", { name: "Playlists" }));
+  const playlists = await screen.findByRole("region", { name: "Artist playlists" });
+  expect(within(playlists).getByText("Radio Mix")).toBeTruthy();
+  expect(within(playlists).queryByText("Night LP")).toBeNull();
+});
+
 test("playlist authors link to their artist page", async () => {
   const playlist: Playlist = {
     id: "81", title: "Night Mix", author: "Curator", artworkUrl: null,
@@ -793,7 +829,7 @@ test("playlist authors link to their artist page", async () => {
   };
   const artist = { id: "9", name: "Curator", avatarUrl: null, trackCount: 12, sourceUrl: "https://soundcloud.com/curator" };
   vi.mocked(api.searchPlaylists).mockResolvedValue({ playlists: [playlist], nextPageToken: null });
-  vi.mocked(api.artistTracks).mockResolvedValue({ artist, tracks: [track] });
+  vi.mocked(api.artistTracks).mockResolvedValue({ artist, tracks: [track], albums: [], playlists: [] });
   render(<App settings={createMemorySettingsStore()} />);
   fireEvent.click(screen.getByRole("tab", { name: "Playlists" }));
   fireEvent.change(screen.getByLabelText("Playlist name"), { target: { value: "night" } });

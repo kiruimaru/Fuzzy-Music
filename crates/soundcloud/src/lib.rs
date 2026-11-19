@@ -48,6 +48,8 @@ pub struct Artist {
 pub struct ArtistTracks {
     pub artist: Artist,
     pub tracks: Vec<Track>,
+    pub albums: Vec<Playlist>,
+    pub playlists: Vec<Playlist>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -204,8 +206,7 @@ impl SoundCloudClient {
                 "Expected an HTTPS SoundCloud artist URL".into(),
             ));
         }
-        let (artist, tracks) = web::artist(options, artist_url, self.network.as_ref())?;
-        Ok(ArtistTracks { artist, tracks })
+        web::artist(options, artist_url, self.network.as_ref())
     }
 
     pub fn resolve_with_options(

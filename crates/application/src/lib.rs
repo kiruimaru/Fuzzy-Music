@@ -95,6 +95,8 @@ pub struct ArtistTracksRequest {
 pub struct ArtistTracksResponse {
     pub artist: Artist,
     pub tracks: Vec<Track>,
+    pub albums: Vec<Playlist>,
+    pub playlists: Vec<Playlist>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -364,6 +366,8 @@ impl Application {
         Ok(ArtistTracksResponse {
             artist: result.artist.into(),
             tracks: result.tracks.into_iter().map(Track::from).collect(),
+            albums: result.albums.into_iter().map(Playlist::from).collect(),
+            playlists: result.playlists.into_iter().map(Playlist::from).collect(),
         })
     }
 }

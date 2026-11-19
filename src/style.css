@@ -140,13 +140,14 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
   grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
 }
 .playlist-card {
-  display: flex; flex-direction: column; gap: 4px; padding: 12px;
+  display: flex; flex-direction: column; gap: 4px; padding: 12px; min-width: 0;
   text-align: left; background: var(--panel); border: 1px solid var(--line);
   border-radius: 12px; color: inherit;
 }
 .playlist-card:hover { background: var(--panel-2); border-color: #3a465f; }
 .playlist-card-open {
   display: flex; flex-direction: column; gap: 4px; padding: 0;
+  width: 100%; min-width: 0;
   border: 0; background: none; color: inherit; font: inherit;
   text-align: left; cursor: pointer;
 }
@@ -164,7 +165,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 }
 .playlist-meta { color: #66708a !important; }
 .playlist-card .artist-link { font-size: 12px; }
-.playlist-card-wrap { position: relative; display: flex; }
+.playlist-card-wrap { position: relative; display: flex; min-width: 0; }
 .playlist-card-wrap .playlist-card { flex: 1; }
 .playlist-card-like {
   position: absolute; top: 8px; right: 8px;

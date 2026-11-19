@@ -959,7 +959,7 @@ export function App({ settings = settingsStore }: { settings?: SettingsStore }) 
       {view === "tracks" && artistLoading && <p className="results-status">Loading artist...</p>}
       {view === "tracks" && artistError && <p className="results-status" role="alert">{artistError}</p>}
 
-      {(view === "tracks" || view === "playlists") && !openArtist && tracks.length > 0 &&
+      {(view === "tracks" || view === "playlists") && (!openArtist || openPlaylist) && tracks.length > 0 &&
         <section aria-label="Search results" className="results">
           <div className="results-head"><span>#</span><span /><span>Title</span><span /><span>Time</span><span /><span /><span /></div>
           {trackRows(tracks)}

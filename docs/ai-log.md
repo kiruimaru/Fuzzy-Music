@@ -802,4 +802,10 @@ the minimal Tauri shell.
 - Artist playlist parsing accepts bare arrays and collection responses and drops entries without a valid SoundCloud set URL. Only the first 50 tracks and 50 sets are loaded per artist in this iteration.
 - Verification: workspace tests 60 passed and 4 ignored; frontend 37 tests; clippy and rustfmt clean; Tauri debug build passed.
 
+## 2026-11-19 — Playlist tracks from artist pages and card alignment
+
+- Playlist and album tracks opened from an artist page were hidden because the results section was gated on the artist being closed. The gate now yields while a playlist is open, so the hero, Play and track rows stay together; Back to artist still returns to the catalog.
+- Playlist cards could widen beyond their grid column: the inner card button had no width bound, so a long nowrap title inflated it and the 100%-wide square cover with it, pushing author and meta down by different amounts. The button is now width-bound with `min-width: 0`, and cards and wrappers shrink to their column, keeping every cover square, inside the padding and aligned across the row.
+- Verification: frontend 37 tests including an album-opened-from-artist track assertion; TypeScript/Vite build passed; Tauri debug build passed.
+
 

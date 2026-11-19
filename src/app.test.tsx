@@ -812,6 +812,11 @@ test("artist page separates tracks, albums and playlists", async () => {
   fireEvent.click(within(albums).getByRole("button", { name: "Open playlist Night LP" }));
   await waitFor(() => expect(api.playlistTracks).toHaveBeenCalledWith(expect.any(Number), album));
   await screen.findByRole("heading", { name: "Night LP" });
+  // Tracks opened from an artist page must stay visible while the artist is
+  // still the return target; only the artist sections are hidden.
+  const albumTracks = await screen.findByRole("region", { name: "Search results" });
+  expect(within(albumTracks).getByText("Example")).toBeTruthy();
+  expect(screen.queryByRole("region", { name: "Artist tracks" })).toBeNull();
 
   fireEvent.click(screen.getByRole("button", { name: "← Back to artist" }));
   const back = await screen.findByRole("region", { name: "Artist" });

@@ -32,6 +32,15 @@ title in over 240 ms without touching playback state.
 All effects use opacity, transform and colours only; none adds pointer-event
 overlays, delays a state update or blocks clicks, so fast track switching and
 panel toggling stay immediate. The `prefers-reduced-motion: reduce` media query
-reduces animation and transition durations to 1 ms. Component structure and
-existing styles stay in place apart from the keyed span and now-playing
-wrapper.
+reduces animation and transition durations to 1 ms, and disables the title
+marquee entirely.
+
+The now-playing title becomes a marquee only when it is wider than its slot:
+the component measures the rendered text against the available width, keeps a
+single clipped copy otherwise, and duplicates the text with `aria-hidden` for a
+seamless linear loop while scrolling. Duration scales with the text width
+(about 55 px per second, clamped to 7–24 s), so long titles glide gently instead
+of racing. ResizeObserver re-checks the fit when the window or player layout
+changes, and reduced-motion preferences keep the plain clipped title. Component
+structure and existing styles stay in place apart from the keyed span, the
+now-playing wrapper and the scoped direct-child text rules.

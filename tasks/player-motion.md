@@ -15,6 +15,7 @@ short, calm transitions that never delay playback or block clicks.
 - Volume popover: animated enter and exit.
 - Queue panel: animated entrance from the queue button.
 - Track changes: now-playing artwork and text fade in; active-row highlight moves smoothly.
+- Now-playing title: gentle marquee only when the text does not fit.
 - Reduced-motion support.
 
 ### Out of scope
@@ -34,6 +35,7 @@ short, calm transitions that never delay playback or block clicks.
 
 ## Verification
 
-- Frontend 37 tests passed; TypeScript/Vite build and Tauri debug build passed.
+- Frontend 37 tests passed; TypeScript/Vite build passed (CSS 18.71 kB, JS 270.06 kB).
 - Manual check: quick skipping and rapid queue toggles stay immediate; sliders
-  respond while dragging; volume popover fades out without blocking the player.
+  respond while dragging; volume popover fades out without blocking the player;
+  long titles glide only when clipped, short titles stay still.

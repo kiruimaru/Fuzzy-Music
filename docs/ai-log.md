@@ -815,6 +815,8 @@ the minimal Tauri shell.
 - Progress and volume sliders brighten on hover and while dragging, and their thumbs grow with a soft accent ring. The volume popover animates both opening and closing with a delayed visibility switch.
 - The queue panel enters with a short fade, rise and scale from its button; it still unmounts immediately on close so rapid toggling never hits a stale layer. The now-playing block is keyed by track URL and fades in on track change; list highlight changes animate their background.
 - Effects use opacity, transform and colours only, add no pointer overlays and never delay state updates. `prefers-reduced-motion` collapses durations to 1 ms. No new dependencies; component structure unchanged apart from the keyed wrappers.
+- The now-playing title scrolls like music platforms: `MarqueeText` measures the rendered text against the available width, renders one clipped copy when it fits, and duplicates the text with `aria-hidden` for a seamless linear loop when it does not. Duration scales with width (about 55 px/s, clamped to 7–24 s); ResizeObserver re-measures on layout changes; reduced motion disables the marquee.
 - Verification: frontend 37 tests passed; TypeScript/Vite build and Tauri debug build passed; CSS 18.29 kB (4.32 kB gzip), JS 269.12 kB.
+- Title marquee verification: frontend 37 tests passed; TypeScript/Vite production build passed; CSS 18.71 kB (4.43 kB gzip), JS 270.06 kB.
 
 

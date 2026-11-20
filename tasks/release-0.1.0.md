@@ -34,12 +34,26 @@ through GitHub Actions. All feature PRs were already integrated. Use SemVer
 - Strict Clippy, rustfmt, actionlint 1.7.7, context smoke and whitespace checks passed.
 - Package assertions now verify URL-safe archive versions, matching clean Git
   provenance across both ZIPs, and the actual executable's SHA256.
-- Pending merge, tag push and the tagged Windows workflow result.
-  Do not treat creating the tag or starting CI as a published release.
+- PR #29 merged as `5baa7c28842188cfa68563d35d9e3702a612b19d`.
+  Annotated tag `v0.1.0` points to that commit; keep the published tag immutable.
+- Tagged workflow [44706880926](https://github.com/kiruimaru/Fuzzy-Music/actions/runs/44706880926)
+  passed both jobs: Windows tests/build/package in 9m25s and publication in 16s.
+- [Fuzzy Music 0.1.0](https://github.com/kiruimaru/Fuzzy-Music/releases/tag/v0.1.0)
+  published on 2026-11-20 at 09:08:56 UTC; not a draft/prerelease, and Latest.
+- Verified all four public assets by downloading the release: portable ZIP
+  5,664,478 bytes; corresponding source ZIP 108,387,383 bytes; two SHA256 sidecars.
+  Both archive checksums passed. Matching provenance reports version 0.1.0,
+  the tagged commit and `dirty=false`; the extracted EXE's digest matches it.
+  Tauri/npm versions and included lucide runtime sources were checked in the ZIP.
 
 ## Handoff
 
-- Working branch: `release/0.1.0`.
+- Release branch `release/0.1.0` merged; checkout returned to `main`.
+- Source/executable artifacts stay pinned to the release commit; the later
+  documentation handoff must not move the tag or replace published files.
 - Manual clean-Windows, listening, real downloads and long-session acceptance
   remain separate from hosted build checks.
 - Prior cache/worker/HTTP lifecycle issues are disclosed, not fixed here.
+- The successful jobs warned that pinned actions target deprecated Node 20
+  and ran on forced Node 24. Refreshing action SHAs is future maintenance,
+  not a release failure.

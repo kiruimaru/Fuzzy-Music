@@ -19,8 +19,10 @@ limits. Task context: `tasks/release-0.1.0.md`.
 
 Local version guard and four regressions, 60 Rust tests (four ignored),
 37 frontend tests, frontend build, strict Clippy, rustfmt, actionlint,
-context smoke and whitespace checks passed. Tagged Windows build/publication
-is pending; no published-release claim is made at this preparation checkpoint.
+context smoke and whitespace checks passed. Tagged workflow `44706880926`
+passed Windows checks, optimized build, archive/provenance assertions and
+publication. Downloaded both public ZIPs and checked their SHA256 sidecars,
+matching clean tagged-commit provenance, executable digest and runtime sources.
 
 ### Decisions
 
@@ -28,10 +30,19 @@ Use v0.1.0, Windows x64 portable plus matching GPL source/checksums. No Linux
 binary, installer, signing or unsupported platform/readiness claim. Existing
 cache/worker/HTTP issues are disclosed rather than represented as fixed.
 
+### Publication
+
+PR #29 merged as `5baa7c2`, tagged `v0.1.0`. GitHub Release
+[Fuzzy Music 0.1.0](https://github.com/kiruimaru/Fuzzy-Music/releases/tag/v0.1.0)
+published on 2026-11-20 at 09:08:56 UTC and is Latest, not draft/prerelease.
+Portable ZIP: 5,664,478 bytes; corresponding source: 108,387,383 bytes, each
+with a SHA256 sidecar. No published tag or asset was replaced.
+
 ### Next action
 
-Merge release preparation, push the version tag, wait for the tagged workflow,
-then verify published assets and record its actual result.
+User tests the Windows portable release. Record clean-host/listening evidence
+separately; keep known lifecycle follow-ups open. Future maintenance should
+refresh pinned actions that emitted a nonfatal Node 20 deprecation warning.
 
 ## 2026-11-20 | Agent: Codex | Task: integrate-open-pr-and-launch
 

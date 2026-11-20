@@ -1,7 +1,7 @@
 # Fuzzy Music Project Context
 
 **Last reviewed:** 2026-11-20
-**Status:** PRs #24–#28 integrated into main; Linux debug build launched for manual acceptance; platform and lifecycle follow-ups remain
+**Status:** first public release 0.1.0 published for Windows x64 portable; platform acceptance and lifecycle follow-ups remain
 
 ## Product
 
@@ -48,6 +48,14 @@ response formats inside the source adapter.
 
 ## Known state
 
+- [Release 0.1.0](https://github.com/kiruimaru/Fuzzy-Music/releases/tag/v0.1.0)
+  is published as Latest, tagged at `5baa7c2` after PR #29. Workflow
+  `44706880926` passed Windows tests, optimized build, corresponding-source
+  packaging, checksums and publication. The portable ZIP and matching source
+  ZIP plus SHA256 sidecars were downloaded and verified after publication.
+  See `../tasks/release-0.1.0.md` and `releases/v0.1.0.md`. Runtime tools remain
+  a separate verified upstream setup; FLAC needs external ffmpeg. No Linux
+  binary, installer or executable signing is provided by this release.
 - PRs #24–#27 were already merged when this session started. The remaining
   PR #28 was validated and merged as `224ecbd`; no open PRs remained at the
   final integration check. Main now includes the local library/settings,

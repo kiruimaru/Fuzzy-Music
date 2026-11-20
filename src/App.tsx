@@ -31,6 +31,47 @@ function SourceIcon({ track }: { track: Track }) {
   return icon ? <img className="source-icon" src={icon} alt="" title={`Source: ${source}`} aria-label={`Source: ${source}`} /> : null;
 }
 
+// Scrolls a title only when it is wider than its slot, like music platforms.
+function MarqueeText({ text }: { text: string }) {
+  const viewport = useRef<HTMLSpanElement>(null);
+  const sample = useRef<HTMLSpanElement>(null);
+  const [scrolling, setScrolling] = useState(false);
+  const [duration, setDuration] = useState(10);
+
+  useEffect(() => {
+    const box = viewport.current;
+    const probe = sample.current;
+    if (!box || !probe) return;
+    const measure = () => {
+      if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) {
+        setScrolling(false);
+        return;
+      }
+      const available = box.clientWidth;
+      const content = probe.getBoundingClientRect().width;
+      setScrolling(content > available + 1);
+      setDuration(Math.min(24, Math.max(7, (content + 40) / 55)));
+    };
+    measure();
+    if (typeof ResizeObserver === "undefined") {
+      window.addEventListener("resize", measure);
+      return () => window.removeEventListener("resize", measure);
+    }
+    const observer = new ResizeObserver(measure);
+    observer.observe(box);
+    return () => observer.disconnect();
+  }, [text]);
+
+  return (
+    <span className={`marquee${scrolling ? " scrolling" : ""}`} ref={viewport}>
+      <span className="marquee-track" style={{ animationDuration: `${duration}s` }}>
+        <span className="marquee-copy"><span className="marquee-text" ref={sample}>{text}</span></span>
+        {scrolling && <span className="marquee-copy" aria-hidden="true">{text}</span>}
+      </span>
+    </span>
+  );
+}
+
 function PlayIcon() {
   return <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M8 5.5v13l11-6.5z" /></svg>;
 }
@@ -1001,7 +1042,9 @@ export function App({ settings = settingsStore }: { settings?: SettingsStore }) 
           <button className="icon-btn" disabled={!active || controlling}
             aria-label={playback === "paused" ? "Resume" : "Pause"}
             onClick={() => void control(generation => api.pause(generation, playback !== "paused"))}>
-            {playback === "paused" ? <PlayIcon /> : <PauseIcon />}
+            <span className="icon-swap" key={playback === "paused" ? "play" : "pause"} aria-hidden="true">
+              {playback === "paused" ? <PlayIcon /> : <PauseIcon />}
+            </span>
           </button>
           <button className="icon-btn" onClick={() => void stop()} disabled={playback === "stopping"} aria-label="Stop">
             <StopIcon />
@@ -1061,9 +1104,9 @@ export function App({ settings = settingsStore }: { settings?: SettingsStore }) 
         </div>
       </div>
 
-      <div className="now-playing">
+      <div className="now-playing" key={selected?.sourceUrl ?? "empty"}>
         <Artwork track={selected} size="small" />
-        <div className="now-text"><strong>{selected ? selected.title : "No track selected"}</strong>
+        <div className="now-text"><strong>{selected ? <MarqueeText text={selected.title} /> : "No track selected"}</strong>
           <span>{selected ? artistLink(selected.author, artistUrlOf(selected), "artist-link inline") : "Search to begin"}</span></div>
       </div>
       {playError && playback !== "error" && <p className="player-error" role="alert">{playError}</p>}

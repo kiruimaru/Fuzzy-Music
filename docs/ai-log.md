@@ -808,4 +808,15 @@ the minimal Tauri shell.
 - Playlist cards could widen beyond their grid column: the inner card button had no width bound, so a long nowrap title inflated it and the 100%-wide square cover with it, pushing author and meta down by different amounts. The button is now width-bound with `min-width: 0`, and cards and wrappers shrink to their column, keeping every cover square, inside the padding and aligned across the row.
 - Verification: frontend 37 tests including an album-opened-from-artist track assertion; TypeScript/Vite build passed; Tauri debug build passed.
 
+## 2026-11-19 — Player motion
+
+- Added shared motion tokens for the player: 140 ms fast, 180 ms base, 240 ms slow, with a smooth `cubic-bezier(.2, .7, .3, 1)` easing and no bounce.
+- Transport, row and panel buttons now animate background, border, colour and transform; icon buttons lift on hover and scale down on press. The Play/Pause glyph fades and scales in through a keyed wrapper.
+- Progress and volume sliders brighten on hover and while dragging, and their thumbs grow with a soft accent ring. The volume popover animates both opening and closing with a delayed visibility switch.
+- The queue panel enters with a short fade, rise and scale from its button; it still unmounts immediately on close so rapid toggling never hits a stale layer. The now-playing block is keyed by track URL and fades in on track change; list highlight changes animate their background.
+- Effects use opacity, transform and colours only, add no pointer overlays and never delay state updates. `prefers-reduced-motion` collapses durations to 1 ms. No new dependencies; component structure unchanged apart from the keyed wrappers.
+- The now-playing title scrolls like music platforms: `MarqueeText` measures the rendered text against the available width, renders one clipped copy when it fits, and duplicates the text with `aria-hidden` for a seamless linear loop when it does not. Duration scales with width (about 55 px/s, clamped to 7–24 s); ResizeObserver re-measures on layout changes; reduced motion disables the marquee.
+- Verification: frontend 37 tests passed; TypeScript/Vite build and Tauri debug build passed; CSS 18.29 kB (4.32 kB gzip), JS 269.12 kB.
+- Title marquee verification: frontend 37 tests passed; TypeScript/Vite production build passed; CSS 18.71 kB (4.43 kB gzip), JS 270.06 kB.
+
 

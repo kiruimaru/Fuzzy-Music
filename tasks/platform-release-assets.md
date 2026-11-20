@@ -18,7 +18,7 @@ after publication of 0.1.0. Preserve the existing tag and Windows artifacts.
 
 ## Verification
 
-Local: six Node tests, Linux wrapper tests (arguments/spaces, environment cleanup,
+Local: eight Node tests across both release suites, Linux wrapper tests (arguments/spaces, environment cleanup,
 missing runtime), Bash syntax, actionlint and whitespace checks passed. The
 standalone Windows EXE extracted from the published ZIP matches the original
 tagged commit and executable SHA256.
@@ -36,12 +36,21 @@ marker and rejects unrelated changes; code remains byte-identical. A third
 workflow, `44713298480`, was cancelled after its Azure Ubuntu mirror throttled
 package downloads for over six minutes. The workflow now selects the official
 HTTPS archive, avoids recommends, and bounds network retries and install time.
+Run `44714676785` hit the eight-minute APT limit: the official runner source
+uses mirror+file indirection, so replacing only direct URLs was insufficient.
+Commit `a7b6044` adds an indirect/direct APT rewrite with regression fixtures.
+Workflow `44716472401` passed all jobs and published the Linux AppImage
+(84,412,920 bytes), packaging source, provenance and SHA256 sidecars. All Linux
+public checksums passed; downloaded packaging scripts match the repository.
+The AppImage opened as a mapped window on the Arch desktop and remains running
+in `fuzzy-music-appimage-test.service`. This verifies startup only, not search,
+listening or long-session stability. Windows assets remain verified and unchanged.
 Failed candidates are retained only
 as explicitly non-release diagnostic Actions artifacts.
 
 A follow-up validates every local checksum before the first upload, with a
 regression covering an empty payload, missing checksum and a corrupt late file.
-Eight Node tests now pass. Frontend 37 tests/build and context smoke also passed.
+Eight Node tests across both release suites pass. Frontend 37 tests/build and context smoke also passed.
 Local workspace Rust tests (60 passed, four ignored), strict Clippy and rustfmt
 passed again. Stripping the real local ELF preserved the checked sections.
 
@@ -49,3 +58,8 @@ passed again. Stripping the real local ELF preserved the checked sections.
 
 Do not describe the standalone EXE as an installer or dependency-free binary.
 Do not move v0.1.0 or replace existing published assets.
+PR #31 merged into main at `8d05a69`; no open PRs remain. Merged local and remote
+topic branches were removed (14 remote, 10 local), preserving main and release
+tags. Windows CI run `44716481312` passed. Final packaging regressions, wrapper
+and APT fixtures, context smoke and whitespace checks passed again. Clean Windows
+acceptance, human listening and broader Linux compatibility remain open.

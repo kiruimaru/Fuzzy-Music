@@ -16,7 +16,7 @@ external-tool policies. Task: `tasks/platform-release-assets.md`.
 
 ### Checks
 
-Eight Node release tests, Linux wrapper argument/environment/missing-tool tests,
+Eight Node tests across both release suites, Linux wrapper argument/environment/missing-tool tests,
 Bash syntax, actionlint and whitespace checks passed. Local extraction of the
 published Windows EXE matched clean tagged-commit provenance and its SHA256.
 Frontend 37 tests/build and context smoke passed. PR #30 merged as `716b923`.
@@ -31,12 +31,21 @@ for other data changes. Third workflow `44713298480` was cancelled on a slow
 Azure APT mirror; switched CI to the official HTTPS archive with bounded
 retries/timeouts and noninteractive, no-recommends installation. Local
 Rust 60 tests (four ignored), strict Clippy and rustfmt passed again.
+The final workflow `44716472401` passed after handling Ubuntu mirror-list
+indirection. Downloaded the published AppImage (84,412,920 bytes), packaging
+source and provenance; all Linux SHA256 sidecars passed and packaging scripts
+matched the repository. The native AppImage window opened on the Arch desktop
+and remains running in `fuzzy-music-appimage-test.service`. PR #31 merged as
+`8d05a69`; no open PRs remain. Deleted 10 merged local and 14 remote topic branches,
+preserving main and tags. The release now has 16 assets, with the immutable
+v0.1.0 tag and original archives unchanged. Windows CI `44716481312` also passed;
+final packaging regressions, Linux fixtures, context and whitespace checks passed.
 
 ### Next action
 
-Finish the hosted AppImage build and public-download checks, then record actual
-results. The follow-up payload check validates all local sidecars before upload;
-no existing tag or asset has been replaced.
+Keep the launched AppImage available for manual testing. Record search, audio
+and long-session results separately; test on clean Windows and additional Linux
+distributions. Startup checks do not establish those acceptance results.
 
 ## 2026-11-20 | Agent: Codex | Task: release-0.1.0
 

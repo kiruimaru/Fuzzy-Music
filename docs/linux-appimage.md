@@ -27,6 +27,12 @@ policy and dispatch to host `mpv`/`yt-dlp`, clearing AppImage library and Python
 paths first. `FUZZY_MPV` and `FUZZY_YTDLP` still override these wrappers.
 SoundCloud access, listening and long-session behavior need manual testing.
 
+The published 0.1.0 AppImage passed the Ubuntu 22.04 Xvfb startup check in
+workflow `44716472401`. Its public download and all Linux asset checksums were
+independently verified; its window also opened on an Arch desktop using the
+process-local extract-and-run and WebKit settings above. These checks establish
+startup, not working SoundCloud search, human listening or universal compatibility.
+
 ## Source and verification
 
 Every asset has a SHA256 sidecar. The Linux provenance JSON records the exact

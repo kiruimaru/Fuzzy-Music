@@ -16,8 +16,10 @@ once before opening the EXE. Alternatively, download the separate
 `Fuzzy-Music-0.1.0-windows-x64.exe` and `setup-windows-runtime.ps1` together.
 The EXE is not an installer and still needs the tools and WebView2 runtime.
 See [release notes and limitations](docs/releases/v0.1.0.md)
-and [Windows setup](docs/windows-alpha.md). Linux can be built from source;
-this release does not provide a Linux binary or installer.
+and [Windows setup](docs/windows-alpha.md). Linux x86_64 users can download
+`Fuzzy-Music-0.1.0-linux-x86_64.AppImage`; it requires host-installed `mpv` and
+an up-to-date `yt-dlp`, plus optional `ffmpeg` for FLAC. See
+[Linux AppImage setup](docs/linux-appimage.md). Neither platform binary is signed.
 
 The player supports pause/resume, position/seek and volume through mpv JSON IPC. See
 [`tasks/playback-controls.md`](tasks/playback-controls.md) for verification and

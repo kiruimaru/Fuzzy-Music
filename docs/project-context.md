@@ -1,7 +1,7 @@
 # Fuzzy Music Project Context
 
 **Last reviewed:** 2026-11-20
-**Status:** first public release 0.1.0 published for Windows x64 portable; platform acceptance and lifecycle follow-ups remain
+**Status:** release 0.1.0 published for Windows x64 portable/EXE and Linux x86_64 AppImage; platform acceptance and lifecycle follow-ups remain
 
 ## Product
 
@@ -54,8 +54,14 @@ response formats inside the source adapter.
   packaging, checksums and publication. The portable ZIP and matching source
   ZIP plus SHA256 sidecars were downloaded and verified after publication.
   See `../tasks/release-0.1.0.md` and `releases/v0.1.0.md`. Runtime tools remain
-  a separate verified upstream setup; FLAC needs external ffmpeg. No Linux
-  binary, installer or executable signing is provided by this release.
+  a separate verified upstream setup; FLAC needs external ffmpeg. PRs #30/#31
+  added a separate Windows EXE and Linux x86_64 AppImage without moving the
+  tag or replacing existing assets. Workflow `44716472401` passed all jobs.
+  The release has 16 assets, including checksums, source and provenance.
+  Platform payloads were independently downloaded and verified. Windows EXE needs the setup
+  script, adjacent generated `tools` and WebView2; Linux needs host `mpv` and
+  current `yt-dlp`. Neither binary is signed or an installer. See
+  `../tasks/platform-release-assets.md` and `linux-appimage.md`.
 - PRs #24–#27 were already merged when this session started. The remaining
   PR #28 was validated and merged as `224ecbd`; no open PRs remained at the
   final integration check. Main now includes the local library/settings,
@@ -65,8 +71,9 @@ response formats inside the source adapter.
   tests, eight Chromium fixture scenarios, strict Clippy/rustfmt, frontend
   and native debug builds, context smoke and Bash syntax. Browser fixtures now
   answer `playlist_entries` and check title overflow/reduced motion.
-  The standalone debug window is mapped and the `fuzzy-music-test.service`
-  user service is running. Real GUI downloads, listening, restart persistence
+  The published AppImage now has a mapped desktop window through the active
+  `fuzzy-music-appimage-test.service`; the earlier debug service is inactive.
+  Real GUI downloads, listening, restart persistence
   and Windows acceptance are not established by these checks.
 - Windows alpha packaging/discovery from PR #20 is integrated; see
   `../tasks/windows-alpha.md`, decision 0005-portable-alpha and `windows-alpha.md`. Live portable
@@ -184,11 +191,12 @@ review findings, contributor contract review, and release/tool packaging decisio
 
 - Contributor review/coordination of #21 overlapping storage implementation and
   remaining #22 and library platform acceptance.
-- Linux release dependency discovery/setup; #20 currently requires beside-app
-  tools for release builds on Linux too, with explicit FUZZY overrides as a workaround.
+- Linux source-build dependency discovery/setup; AppImage wrappers now dispatch
+  to host `mpv`/`yt-dlp`, while unbundled release builds still require
+  beside-app tools or explicit FUZZY overrides.
 - SQLite schema migration review and future migration strategy beyond version 1.
 - Minimum supported Windows and Linux versions.
-- CI matrix and release artifact format.
+- Broader CI/platform acceptance beyond Windows portable and Linux AppImage.
 
 When an open decision is resolved, add a short record under
 [`decisions/`](decisions/), then update this file.

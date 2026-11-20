@@ -45,3 +45,15 @@ short, calm transitions that never delay playback or block clicks.
 - Manual check: quick skipping and rapid queue toggles stay immediate; sliders
   respond while dragging; volume popover fades out without blocking the player;
   long titles glide only when clipped, short titles stay still.
+
+## Integration handoff (2026-11-20)
+
+- Added fixture/regression coverage in `5fcfe36`; PR #28 merged as `224ecbd`.
+  PRs #24–#27 were already merged; no open PRs remained at the final check.
+- Rebuilt `main` with `npm run tauri -- build --debug --no-bundle`.
+- Launched the standalone binary as `fuzzy-music-test.service`; service is
+  active and the native Fuzzy Music window is mapped, not hidden.
+- Reused the existing local proxy with process-only environment overrides;
+  SoundCloud returned HTTP 200. No proxy endpoint or personal path is stored here.
+- Next: user listening, rapid skips, queue/volume interaction, real downloads
+  and restart persistence. Windows and accepted lifecycle findings remain separate.

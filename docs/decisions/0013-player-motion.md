@@ -1,6 +1,6 @@
 # 0013: Player motion
 
-Date: 2026-11-19. Status: stacked on the artist pages branch; review pending.
+Date: 2026-11-19. Status: integrated into main through PR #28 on 2026-11-20.
 
 The player gains a small CSS-only motion layer instead of a new animation
 dependency. Shared tokens live in `:root`: `--motion-fast` 140 ms,

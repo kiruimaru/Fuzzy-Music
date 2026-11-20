@@ -1,5 +1,44 @@
 # AI Work Log
 
+## 2026-11-20 | Agent: Codex | Task: integrate-open-pr-and-launch
+
+### Goal
+
+Integrate all remaining PRs, build the desktop application and leave it open
+for the user's manual testing.
+
+### Changed
+
+- Confirmed PRs #24–#27 were already merged and reviewed the remaining PR #28.
+- Fixed missing `playlist_entries` fixture responses; added assertions for
+  overflowing title duplication and reduced-motion animation suppression.
+- Published the test follow-up `5fcfe36`, merged #28 as `224ecbd` and updated main.
+- Rebuilt the standalone debug app and launched `fuzzy-music-test.service`.
+  The native window is mapped/not hidden and the service is active.
+
+### Checks
+
+60 Rust tests passed (four ignored), 37 frontend tests and eight Chromium
+fixture tests passed. Strict Clippy, rustfmt, frontend/native debug builds,
+context smoke, Bash syntax and whitespace checks passed. Initial browser
+failures were traced to missing fixture responses and passed after correction.
+SoundCloud returned HTTP 200 through the existing local proxy; this does not
+establish real GUI search or playback. No open PRs remained after integration.
+
+### Decisions
+
+Preserved contributor branches and merged the reviewed head without rewriting
+history. Renderer/proxy workarounds affect only the launched process.
+
+### Open questions
+
+Human listening, real GUI downloads, restart persistence and Windows acceptance
+remain unverified. Previously accepted cache/worker/HTTP issues remain open.
+
+### Next action
+
+User tests the running application; record concrete failures before further fixes.
+
 ## 2026-11-19 | Agent: Codex | Task: favourites-local-library-review-handoff
 
 ### Goal

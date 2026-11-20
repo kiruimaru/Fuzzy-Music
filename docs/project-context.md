@@ -1,7 +1,7 @@
 # Fuzzy Music Project Context
 
-**Last reviewed:** 2026-11-19
-**Status:** session queue, local favourites/settings and music library implemented locally; contributor and platform review remain
+**Last reviewed:** 2026-11-20
+**Status:** PRs #24–#28 integrated into main; Linux debug build launched for manual acceptance; platform and lifecycle follow-ups remain
 
 ## Product
 
@@ -48,6 +48,18 @@ response formats inside the source adapter.
 
 ## Known state
 
+- PRs #24–#27 were already merged when this session started. The remaining
+  PR #28 was validated and merged as `224ecbd`; no open PRs remained at the
+  final integration check. Main now includes the local library/settings,
+  playlist bookmarks with cancellable downloads, artist catalogs/list playback,
+  and player motion. See their task contexts for feature-specific limits.
+- Linux integration checks passed: 60 Rust tests (four ignored), 37 frontend
+  tests, eight Chromium fixture scenarios, strict Clippy/rustfmt, frontend
+  and native debug builds, context smoke and Bash syntax. Browser fixtures now
+  answer `playlist_entries` and check title overflow/reduced motion.
+  The standalone debug window is mapped and the `fuzzy-music-test.service`
+  user service is running. Real GUI downloads, listening, restart persistence
+  and Windows acceptance are not established by these checks.
 - Windows alpha packaging/discovery from PR #20 is integrated; see
   `../tasks/windows-alpha.md`, decision 0005-portable-alpha and `windows-alpha.md`. Live portable
   search/Playing/Stop passed with Windows-only PATH and different cwd. Public

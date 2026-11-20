@@ -1,0 +1,133 @@
+name: Additional release assets
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - .github/workflows/platform-assets.yml
+      - scripts/release-assets*
+      - scripts/*linux*
+      - scripts/package-appimage.sh
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Existing published release tag (never moved or replaced)
+        required: true
+        default: v0.1.0
+permissions:
+  contents: read
+concurrency:
+  group: platform-assets-${{ inputs.release_tag || github.ref }}
+  cancel-in-progress: false
+jobs:
+  checks:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+      - run: node --test scripts/release-assets.test.mjs
+      - run: bash scripts/test-linux-runtime.sh
+      - run: bash -n scripts/package-appimage.sh scripts/linux-runtime-tool.sh scripts/test-linux-runtime.sh
+  windows-exe:
+    if: github.event_name == 'workflow_dispatch'
+    needs: checks
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      RELEASE_TAG: ${{ inputs.release_tag }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+      - name: Extract and verify the already published Windows executable
+        run: |
+          node --input-type=module -e 'import {versionFromTag} from "./scripts/release-assets.mjs"; versionFromTag(process.env.RELEASE_TAG)'
+          gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --pattern '*-windows-x64.zip*' --dir portable
+          commit=$(git rev-list -n1 "$RELEASE_TAG")
+          node scripts/release-assets.mjs windows "$RELEASE_TAG" portable windows-assets "$commit"
+      - name: Publish additional files without replacing existing assets
+        run: node scripts/release-assets.mjs upload "$RELEASE_TAG" windows-assets
+  appimage:
+    if: github.event_name == 'workflow_dispatch'
+    needs: checks
+    runs-on: ubuntu-22.04
+    timeout-minutes: 60
+    env:
+      RELEASE_TAG: ${{ inputs.release_tag }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          path: packaging
+          persist-credentials: false
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ inputs.release_tag }}
+          path: application
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: application/package-lock.json
+      - name: Install Linux build and smoke-test dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential curl wget file patchelf libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev libssl-dev libfuse2 mpv yt-dlp xvfb
+      - run: npm ci
+        working-directory: application
+      - name: Verify release tag against published source provenance
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --pattern '*-windows-x64.zip*' --dir portable
+          commit=$(git -C application rev-parse HEAD)
+          node packaging/scripts/release-assets.mjs windows "$RELEASE_TAG" portable verified-windows "$commit"
+      - run: npm test && npm run test:release
+        working-directory: application
+      - name: Build the exact tagged application with Linux packaging overlays
+        run: bash packaging/scripts/package-appimage.sh application "$RELEASE_TAG" linux-assets
+      - name: Smoke-test the AppImage window under Xvfb
+        run: |
+          set +e
+          APPIMAGE_EXTRACT_AND_RUN=1 WEBKIT_DISABLE_DMABUF_RENDERER=1 timeout 20s xvfb-run -a linux-assets/*.AppImage > smoke.log 2>&1
+          status=$?
+          set -e
+          cat smoke.log
+          test "$status" -eq 124
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: fuzzy-music-linux-appimage
+          path: linux-assets/*
+          compression-level: 0
+          if-no-files-found: error
+          retention-days: 14
+  publish-appimage:
+    needs: appimage
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+      actions: read
+    env:
+      GH_TOKEN: ${{ github.token }}
+      RELEASE_TAG: ${{ inputs.release_tag }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: fuzzy-music-linux-appimage
+          path: linux-assets
+      - run: node scripts/release-assets.mjs upload "$RELEASE_TAG" linux-assets

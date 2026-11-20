@@ -30,6 +30,7 @@ jobs:
           node-version: '22'
       - run: node --test scripts/release-assets.test.mjs
       - run: bash scripts/test-linux-runtime.sh
+      - run: bash scripts/test-linux-apt.sh
       - run: bash -n scripts/package-appimage.sh scripts/linux-runtime-tool.sh scripts/test-linux-runtime.sh
   windows-exe:
     if: github.event_name == 'workflow_dispatch'
@@ -82,7 +83,7 @@ jobs:
         timeout-minutes: 8
         run: |
           # The runner's Azure mirror can throttle individual packages for minutes.
-          sudo find /etc/apt -maxdepth 2 -type f \( -name '*.list' -o -name '*.sources' \) -exec sed -i 's|http://azure.archive.ubuntu.com/ubuntu|https://archive.ubuntu.com/ubuntu|g' {} +
+          sudo bash packaging/scripts/configure-linux-apt.sh
           apt_options=(-o Acquire::Retries=2 -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 -o Acquire::ForceIPv4=true -o Dpkg::Use-Pty=0)
           sudo env DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=a apt-get "${apt_options[@]}" update
           sudo env DEBIAN_FRONTEND=noninteractive NEEDRESTART_MODE=a apt-get "${apt_options[@]}" install -y --no-install-recommends build-essential curl wget file patchelf libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev libssl-dev libfuse2 mpv yt-dlp xvfb xauth

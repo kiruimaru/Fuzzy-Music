@@ -1,22 +1,31 @@
-name: Windows alpha
+name: Windows build and release
 on:
   pull_request:
     branches: [main]
   workflow_dispatch:
+  push:
+    tags: ['v[0-9]*']
 permissions:
   contents: read
+concurrency:
+  group: windows-${{ github.ref }}
+  cancel-in-progress: false
 jobs:
   portable:
     runs-on: windows-2022
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: '22'
           cache: npm
       - run: rustup component add rustfmt clippy
       - run: npm ci
+      - run: npm run check:release
+      - run: npm run test:release
       - run: cargo fmt --all --check
       - run: cargo test --workspace --all-targets --locked
       - run: cargo clippy --workspace --all-targets --locked -- -D warnings
@@ -24,19 +33,49 @@ jobs:
       - run: powershell -NoProfile -File scripts/package-windows.ps1
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: fuzzy-music-windows-alpha-portable
+          name: fuzzy-music-windows-portable
           compression-level: 0
           path: |
-            artifacts/windows-alpha/*Windows x64.zip
-            artifacts/windows-alpha/*Windows x64.zip.sha256
+            artifacts/windows-alpha/*-windows-x64.zip
+            artifacts/windows-alpha/*-windows-x64.zip.sha256
           if-no-files-found: error
           retention-days: 14
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: fuzzy-music-windows-alpha-corresponding-source
+          name: fuzzy-music-windows-corresponding-source
           compression-level: 0
           path: |
             artifacts/windows-alpha/*corresponding-source.zip
             artifacts/windows-alpha/*corresponding-source.zip.sha256
           if-no-files-found: error
           retention-days: 14
+  publish:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: portable
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      actions: read
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          pattern: fuzzy-music-windows-*
+          merge-multiple: true
+          path: release-assets
+      - name: Verify release payload
+        working-directory: release-assets
+        run: |
+          test "$(find . -maxdepth 1 -type f | wc -l)" -eq 4
+          sha256sum --check -- *.sha256
+      - name: Publish versioned release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" release-assets/*.zip release-assets/*.sha256 \
+            --repo "$GITHUB_REPOSITORY" --verify-tag \
+            --title "Fuzzy Music ${GITHUB_REF_NAME#v}" \
+            --notes-file "docs/releases/$GITHUB_REF_NAME.md" --latest

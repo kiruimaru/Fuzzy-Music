@@ -1,5 +1,38 @@
 # AI Work Log
 
+## 2026-11-20 | Agent: Codex | Task: release-0.1.0
+
+### Goal
+
+Publish the owner-authorized first 0.1 release through GitHub Actions.
+
+### Changed
+
+Aligned shell/Tauri/npm at 0.1.0. Extended the Windows workflow with version-tag
+validation and release publication after successful tests/build/package checks.
+Added version-guard regressions, version-derived URL-safe filenames, clean
+Git/executable provenance checks and all direct frontend runtime sources.
+Updated first-run/FLAC instructions and added Russian release notes with known
+limits. Task context: `tasks/release-0.1.0.md`.
+
+### Checks
+
+Local version guard and four regressions, 60 Rust tests (four ignored),
+37 frontend tests, frontend build, strict Clippy, rustfmt, actionlint,
+context smoke and whitespace checks passed. Tagged Windows build/publication
+is pending; no published-release claim is made at this preparation checkpoint.
+
+### Decisions
+
+Use v0.1.0, Windows x64 portable plus matching GPL source/checksums. No Linux
+binary, installer, signing or unsupported platform/readiness claim. Existing
+cache/worker/HTTP issues are disclosed rather than represented as fixed.
+
+### Next action
+
+Merge release preparation, push the version tag, wait for the tagged workflow,
+then verify published assets and record its actual result.
+
 ## 2026-11-20 | Agent: Codex | Task: integrate-open-pr-and-launch
 
 ### Goal

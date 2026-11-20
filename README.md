@@ -8,6 +8,14 @@ The repository includes a Rust SoundCloud adapter, a typed application API,
 and a Tauri 2 + React/TypeScript shell for search and mpv playback.
 See [desktop setup and verification](docs/shell-development.md).
 
+## Release 0.1.0
+
+The first public release targets Windows x64 portable. Download the application
+ZIP, not the corresponding-source ZIP, and run its included runtime setup script
+once before opening the EXE. See [release notes and limitations](docs/releases/v0.1.0.md)
+and [Windows setup](docs/windows-alpha.md). Linux can be built from source;
+this release does not provide a Linux binary or installer.
+
 The player supports pause/resume, position/seek and volume through mpv JSON IPC. See
 [`tasks/playback-controls.md`](tasks/playback-controls.md) for verification and
 remaining limitations. Playlist playback supports previous/next and automatic
@@ -95,7 +103,7 @@ Team responsibilities are recorded in
 - `docs/architecture` and `docs/decisions`: contracts and durable decisions.
 - `docs/project-context.md`, `docs/ai-log.md`, and `tasks`: current state and
   contributor handoffs.
-- `.github`: issue/PR templates and Windows alpha build/artifact workflow.
+- `.github`: issue/PR templates and Windows build/release workflow.
 
 Keep Tauri commands above `crates/application`; the frontend must use
 the documented DTOs. Settings, favourites and the local library use persistent
@@ -163,9 +171,9 @@ Linux с указанной выше проблемой WebKit перед ком
 
 ## Quick start on Windows x64
 
-For the portable alpha artifact and first-run runtime setup, see
-[Windows alpha](docs/windows-alpha.md). The player includes playlist playback
-and controls; the full MVP and clean-machine verification remain unfinished.
+For the portable release and first-run runtime setup, see
+[Windows setup](docs/windows-alpha.md). The player includes playlist playback,
+controls and a local library; clean-machine verification remains unfinished.
 Choose the **portable** artifact for the small user download; matching GPL
 application and vendored dependency sources are a separate **corresponding-source**
 artifact on the same build, with checksums and Git/executable provenance.

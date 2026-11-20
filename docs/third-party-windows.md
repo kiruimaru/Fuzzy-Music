@@ -1,8 +1,8 @@
-# Windows alpha distribution and provenance
+# Windows distribution and provenance
 
-The portable alpha ZIP contains Fuzzy Music, its GPL-3.0 license and npm package
+The portable ZIP contains Fuzzy Music, its GPL-3.0 license and npm package
 notices in `licenses/npm/`. The separate **corresponding-source** download on the
-same Actions run contains exact application sources/build scripts/lockfiles,
+same release or Actions run contains exact application sources/build scripts/lockfiles,
 locked Rust dependency sources/licenses in `vendor/`, and frontend runtime sources.
 Both archives carry matching SOURCE-PROVENANCE.json (Git commit/tree, dirty flag,
 executable SHA256); each has its own checksum. Distributors must keep the matching
@@ -31,7 +31,7 @@ cd4e96eb3. Build recipes: https://github.com/shinchiro/mpv-winbuild-cmake/tree/2
 build run: https://github.com/shinchiro/mpv-winbuild-cmake/actions/runs/42927840447 .
 That run exposes binaries/debug artifacts, not a complete corresponding-source
 archive. Recipes include moving Git dependencies; downloading current HEADs is
-not an exact source reconstruction. Consequently this alpha does not redistribute
+not an exact source reconstruction. Consequently this distribution does not redistribute
 mpv, FFmpeg, d3dcompiler_43.dll or the upstream archive. A user-installed `tools/`
 directory must not be repackaged as this project's distribution without supplying
 the complete matching sources, build scripts and required notices.
@@ -45,4 +45,5 @@ The executable is acquired by the user directly, not shipped by this project.
 
 The previous developer-host all-in-one ZIP is a local test candidate only. The
 GitHub Actions artifact is the bootstrap distribution described above, without
-external runtime binaries. No standalone ffmpeg.exe is needed for this slice.
+external runtime binaries. FLAC conversion requires a separately installed
+`ffmpeg.exe` on PATH; it is not included or acquired by the runtime setup script.

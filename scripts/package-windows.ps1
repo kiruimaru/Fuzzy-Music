@@ -2,13 +2,16 @@ param([switch]$SkipBuild, [string]$OutputDirectory = 'artifacts/windows-alpha')
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
 if (-not (Test-Path -LiteralPath $root)) { throw 'Repository missing' }
+& node (Join-Path $PSScriptRoot 'check-release.mjs')
+if ($LASTEXITCODE) { throw 'Release version validation failed' }
+$version = (Get-Content -LiteralPath (Join-Path $root 'src-tauri/tauri.conf.json') -Raw | ConvertFrom-Json).version
 if (-not $SkipBuild) {
     & npm.cmd run tauri -- build --no-bundle
     if ($LASTEXITCODE) { throw 'Tauri release build failed' }
 }
 $release = Join-Path $root $OutputDirectory
 New-Item -ItemType Directory -Force $release | Out-Null
-$stage = Join-Path $release 'Fuzzy Music 0.1.0-alpha.1 Windows x64'
+$stage = Join-Path $release "Fuzzy-Music-$version-windows-x64"
 if (Test-Path -LiteralPath $stage) { throw 'Staging directory exists; preserve/rename it before packaging again.' }
 New-Item -ItemType Directory $stage | Out-Null
 Copy-Item (Join-Path $root 'scripts/setup-windows-runtime.ps1') $stage
@@ -26,7 +29,7 @@ foreach ($file in (Get-ChildItem -LiteralPath (Join-Path $root 'node_modules') -
 }
 # Offer exact working source and locked Rust sources as a separate download.
 # No external runtime executable is redistributed in this archive.
-$source = Join-Path $release 'Fuzzy Music 0.1.0-alpha.1 corresponding-source'
+$source = Join-Path $release "Fuzzy-Music-$version-corresponding-source"
 if (Test-Path -LiteralPath $source) { throw 'Source staging exists; choose a fresh output directory.' }
 New-Item -ItemType Directory $source | Out-Null
 foreach ($name in @('Cargo.toml','Cargo.lock','package.json','package-lock.json','index.html','tsconfig.json','vite.config.ts','LICENSE','README.md','AGENTS.md')) {
@@ -45,12 +48,13 @@ foreach ($name in $tracked) {
 $commit = & git -C $root rev-parse HEAD
 $tree = & git -C $root rev-parse 'HEAD^{tree}'
 $dirty = @(& git -C $root status --porcelain --untracked-files=no)
-$provenance = [ordered]@{ commit=$commit; tree=$tree; dirty=($dirty.Count -gt 0); note='Tracked working files packaged; dirty=true means local edits differ from the recorded Git tree.'; executableSha256=(Get-FileHash (Join-Path $stage 'Fuzzy Music.exe')).Hash.ToLowerInvariant() }
+$provenance = [ordered]@{ version=$version; commit=$commit; tree=$tree; dirty=($dirty.Count -gt 0); note='Tracked working files packaged; dirty=true means local edits differ from the recorded Git tree.'; executableSha256=(Get-FileHash (Join-Path $stage 'Fuzzy Music.exe')).Hash.ToLowerInvariant() }
 $provenance | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $source 'SOURCE-PROVENANCE.json') -Encoding UTF8
 $provenance | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $stage 'SOURCE-PROVENANCE.json') -Encoding UTF8
 $frontendSource = Join-Path $source 'frontend-dependencies'
 New-Item -ItemType Directory $frontendSource | Out-Null
-foreach ($name in @('react','react-dom','scheduler','@tauri-apps/api')) {
+$frontendPackages = (Get-Content -LiteralPath (Join-Path $root 'package.json') -Raw | ConvertFrom-Json).dependencies.PSObject.Properties.Name
+foreach ($name in @($frontendPackages) + @('scheduler')) {
     $destination = Join-Path $frontendSource $name
     New-Item -ItemType Directory -Force (Split-Path -Parent $destination) | Out-Null
     Copy-Item (Join-Path $root "node_modules/$name") $destination -Recurse

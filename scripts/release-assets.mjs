@@ -46,14 +46,7 @@ function windows(tag, input, output, commit) {
   writeAsset(join(output, `${name}.provenance.json`), `${JSON.stringify(provenance, null, 2)}\n`);
 }
 
-function upload(tag, directory) {
-  versionFromTag(tag);
-  const repo = process.env.GITHUB_REPOSITORY;
-  if (!repo) throw new Error("GITHUB_REPOSITORY is required");
-  const release = JSON.parse(gh(["api", `repos/${repo}/releases/tags/${tag}`]));
-  if (release.immutable || release.draft) throw new Error("Release must be published and mutable");
-  const sourceName = `Fuzzy-Music-${versionFromTag(tag)}-corresponding-source.zip`;
-  if (!release.assets.some((asset) => asset.name === sourceName)) throw new Error("Matching application source archive is missing");
+export function verifyAssets(directory) {
   const files = readdirSync(directory);
   if (!files.length) throw new Error("No assets to publish");
   for (const name of files) {
@@ -66,6 +59,21 @@ function upload(tag, directory) {
     } else if (!files.includes(`${name}.sha256`)) {
       throw new Error(`Missing checksum: ${name}`);
     }
+  }
+  return files;
+}
+
+function upload(tag, directory) {
+  versionFromTag(tag);
+  const files = verifyAssets(directory);
+  const repo = process.env.GITHUB_REPOSITORY;
+  if (!repo) throw new Error("GITHUB_REPOSITORY is required");
+  const release = JSON.parse(gh(["api", `repos/${repo}/releases/tags/${tag}`]));
+  if (release.immutable || release.draft) throw new Error("Release must be published and mutable");
+  const sourceName = `Fuzzy-Music-${versionFromTag(tag)}-corresponding-source.zip`;
+  if (!release.assets.some((asset) => asset.name === sourceName)) throw new Error("Matching application source archive is missing");
+  for (const name of files) {
+    const local = readFileSync(join(directory, name));
     const existing = release.assets.find((asset) => asset.name === name);
     if (existing) {
       const published = gh(["release", "download", tag, "--repo", repo, "--pattern", name, "--output", "-"]);

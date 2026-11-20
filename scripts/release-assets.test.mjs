@@ -1,11 +1,29 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { sha256, verifyProvenance, versionFromTag } from "./release-assets.mjs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { sha256, verifyAssets, verifyProvenance, versionFromTag, writeAsset } from "./release-assets.mjs";
 
 test("only stable version tags are accepted", () => {
   assert.equal(versionFromTag("v0.1.0"), "0.1.0");
   for (const tag of ["main", "v0.1.0/other", "0.1.0", "v0.1.0-rc.1"]) {
     assert.throws(() => versionFromTag(tag));
+  }
+});
+
+test("validate the entire payload before uploading any file", () => {
+  const directory = mkdtempSync(join(tmpdir(), "fuzzy-assets-"));
+  try {
+    assert.throws(() => verifyAssets(directory), /No assets/);
+    writeAsset(join(directory, "a.exe"), Buffer.from("MZ-fixture"));
+    assert.equal(verifyAssets(directory).length, 2);
+    writeFileSync(join(directory, "z.exe"), "MZ-other");
+    assert.throws(() => verifyAssets(directory), /Missing checksum/);
+    writeFileSync(join(directory, "z.exe.sha256"), "bad\n");
+    assert.throws(() => verifyAssets(directory), /Invalid checksum/);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
   }
 });
 

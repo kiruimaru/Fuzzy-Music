@@ -23,7 +23,18 @@ missing runtime), Bash syntax, actionlint and whitespace checks passed. The
 standalone Windows EXE extracted from the published ZIP matches the original
 tagged commit and executable SHA256.
 
-Pending PR merge, hosted packaging and public downloads.
+PR #30 merged as `716b923`. Workflow `44710709445` published the Windows
+EXE (15,822,336 bytes), runtime setup script and provenance with SHA256 sidecars.
+All six assets were downloaded again and verified; the public EXE is identical
+to the original portable executable. The AppImage built (80.50 MiB), but the
+first attempt correctly stopped before publication because the validation used
+whole-file identity despite linuxdeploy's ELF processing. The follow-up compares
+nonempty .text/.rodata and records both original and packaged ELF hashes.
+Linux retry/publication is pending.
+
+A follow-up validates every local checksum before the first upload, with a
+regression covering an empty payload, missing checksum and a corrupt late file.
+Seven Node tests now pass. Frontend 37 tests/build and context smoke also passed.
 
 ## Handoff
 

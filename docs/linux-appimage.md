@@ -30,7 +30,9 @@ SoundCloud access, listening and long-session behavior need manual testing.
 ## Source and verification
 
 Every asset has a SHA256 sidecar. The Linux provenance JSON records the exact
-application commit/tree, packaging commit and executable/AppImage digests. The
+application commit/tree, packaging commit and original/packaged ELF and AppImage
+digests. The bundler patches library lookup paths and strips ELF metadata; the
+packaging check compares the nonempty code and read-only data sections. The
 existing `Fuzzy-Music-0.1.0-corresponding-source.zip` supplies the tagged
 application, locked Rust dependency sources and frontend runtime sources. The
 additional `linux-packaging-source.tar.gz` supplies packaging scripts, workflow,

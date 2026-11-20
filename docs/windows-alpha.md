@@ -29,7 +29,10 @@ RU: Если SoundCloud недоступен напрямую, включите 
 
 ## Downloads
 
-Use `Fuzzy-Music-0.1.0-windows-x64.zip` to run the app. The matching
+Use `Fuzzy-Music-0.1.0-windows-x64.zip` to run the app. A separate
+`Fuzzy-Music-0.1.0-windows-x64.exe` is also published with
+`setup-windows-runtime.ps1`; it is the same EXE from the ZIP, not a standalone
+installer. Keep both files together while setting up the tools. The matching
 `Fuzzy-Music-0.1.0-corresponding-source.zip` is a separate source download,
 not needed for normal playback. Exact sizes and SHA256 checksums are emitted
 by the workflow and published with the release.

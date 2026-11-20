@@ -52,7 +52,11 @@ for section in .text .rodata; do
   objcopy -O binary --only-section="$section" "$app/target/release/fuzzy-shell" "$stage/original$section"
   objcopy -O binary --only-section="$section" squashfs-root/usr/bin/fuzzy-shell "$stage/packaged$section"
   test -s "$stage/original$section"
-  cmp "$stage/original$section" "$stage/packaged$section"
+  if [[ $section == .rodata ]]; then
+    node "$packaging/scripts/release-assets.mjs" linux-rodata "$stage/original$section" "$stage/packaged$section"
+  else
+    cmp "$stage/original$section" "$stage/packaged$section"
+  fi
 done
 ./squashfs-root/usr/bin/tools/mpv --version
 ./squashfs-root/usr/bin/tools/yt-dlp --version

@@ -3,7 +3,17 @@ import test from "node:test";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { sha256, verifyAssets, verifyProvenance, versionFromTag, writeAsset } from "./release-assets.mjs";
+import { sha256, verifyAssets, verifyLinuxReadOnlyData, verifyProvenance, versionFromTag, writeAsset } from "./release-assets.mjs";
+
+test("ELF constants may change only in Tauri's known AppImage bundle marker", () => {
+  const original = Buffer.from('prefix\0__TAURI_BUNDLE_TYPE_VAR_UNK\0suffix\xff', 'latin1');
+  const packaged = Buffer.from('prefix\0__TAURI_BUNDLE_TYPE_VAR_APP\0suffix\xff', 'latin1');
+  verifyLinuxReadOnlyData(original, original);
+  verifyLinuxReadOnlyData(original, packaged);
+  assert.throws(() => verifyLinuxReadOnlyData(original, Buffer.from('changed\0__TAURI_BUNDLE_TYPE_VAR_APP\0suffix\xff', 'latin1')));
+  assert.throws(() => verifyLinuxReadOnlyData(original, Buffer.from('prefix\0__TAURI_BUNDLE_TYPE_VAR_DEB\0suffix\xff', 'latin1')));
+  assert.throws(() => verifyLinuxReadOnlyData(Buffer.alloc(0), Buffer.alloc(0)));
+});
 
 test("only stable version tags are accepted", () => {
   assert.equal(versionFromTag("v0.1.0"), "0.1.0");

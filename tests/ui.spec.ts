@@ -11,6 +11,7 @@ for (const viewport of [{ width: 1000, height: 720 }, { width: 320, height: 640 
           invoke: async (command: string, args: { generation: number; action: { type: string; paused: boolean; volume: number; position_ms: number } }) => {
             if (command === "get_settings" || command === "update_settings") return { volume: 100, downloadQuality: "best", musicFolder: "/music" };
             if (command === "library_entries") return [];
+            if (command === "playlist_entries") return [];
             if (command === "search_tracks") return {
               tracks: [{
                 id: "1", title: "A very long track title with Supercalifragilisticexpialidocious",
@@ -64,6 +65,12 @@ for (const viewport of [{ width: 1000, height: 720 }, { width: 320, height: 640 
     await expect(page.getByText("Example artist", { exact: true })).toBeVisible();
     await page.getByRole("button", { name: /^Play A very/ }).click();
     await expect(page.getByText("Playing", { exact: true })).toBeVisible();
+    const marquee = page.locator(".now-playing .marquee");
+    await expect(marquee).toHaveClass("marquee scrolling");
+    await expect(marquee.locator('[aria-hidden="true"]')).toHaveCount(1);
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await expect(marquee.locator(".marquee-track")).toHaveCSS("animation-name", "none");
+    await page.emulateMedia({ reducedMotion: "no-preference" });
     await page.getByRole("button", { name: "Pause", exact: true }).click();
     await expect(page.getByText("Paused", { exact: true })).toBeVisible();
     await page.getByRole("button", { name: "Resume", exact: true }).click();
@@ -99,6 +106,7 @@ test("playlist search and open at 1000px with fixture IPC", async ({ page }) => 
         invoke: async (command: string) => {
           if (command === "get_settings") return { volume: 100, downloadQuality: "best", musicFolder: "/music" };
           if (command === "library_entries") return [];
+          if (command === "playlist_entries") return [];
           if (command === "search_playlists") return { playlists: [playlist], nextPageToken: null };
           if (command === "playlist_tracks") return {
             playlist,
@@ -148,6 +156,7 @@ test("player bar stays visible with a long playlist", async ({ page }) => {
         invoke: async (command: string) => {
           if (command === "get_settings") return { volume: 100, downloadQuality: "best", musicFolder: "/music" };
           if (command === "library_entries") return [];
+          if (command === "playlist_entries") return [];
           if (command === "search_playlists") return { playlists: [playlist], nextPageToken: null };
           if (command === "playlist_tracks") return { playlist, tracks, skippedTrackCount: 0 };
           if (command === "playback_status") return {
@@ -209,6 +218,7 @@ for (const width of [1000, 320]) {
         }) => {
           if (command === "get_settings") return { volume: 100, downloadQuality: "best", musicFolder: "/music" };
           if (command === "library_entries") return [];
+          if (command === "playlist_entries") return [];
           if (command === "search_tracks") return { tracks, nextPageToken: null };
           if (command === "play_track") {
             if (!args.fresh) throw new Error("Session tracks must resolve fresh");
@@ -283,6 +293,7 @@ for (const width of [1000, 320]) {
           if (command === "search_tracks") return { tracks: [track], nextPageToken: null };
           if (command === "set_favourite") { liked = args.liked; return; }
           if (command === "library_entries") return liked ? [{ id: 7, track, favourite: true, downloadState: "ready", error: null, availableOffline: true }] : [];
+          if (command === "playlist_entries") return [];
           if (command === "choose_music_folder") return "/new music";
           if (command === "scan_library") return { imported: 0, skipped: 0, truncated: false };
           if (command === "play_library_track") status = { ...status, generation: args.generation, state: "playing", trackId: "1", volume: args.volume };

@@ -1,5 +1,31 @@
 # AI Work Log
 
+## 2026-11-20 | Agent: Codex | Task: platform-release-assets
+
+### Goal
+
+Add the owner-requested Linux AppImage and separate Windows EXE to the existing
+0.1.0 release without moving its tag or replacing published Windows archives.
+
+### Changed
+
+Added a manual platform-assets workflow, verified Windows ZIP extraction,
+host-tool AppImage overlay, additional checksums/provenance/packaging sources
+and platform setup instructions. Decision 0013 records the unchanged-tag and
+external-tool policies. Task: `tasks/platform-release-assets.md`.
+
+### Checks
+
+Six Node release tests, Linux wrapper argument/environment/missing-tool tests,
+Bash syntax, actionlint and whitespace checks passed. Local extraction of the
+published Windows EXE matched clean tagged-commit provenance and its SHA256.
+Hosted build/publication and downloaded-asset checks are still pending.
+
+### Next action
+
+Merge the focused packaging PR, dispatch the workflow, verify the actual public
+assets and update release instructions with only observed outcomes.
+
 ## 2026-11-20 | Agent: Codex | Task: release-0.1.0
 
 ### Goal

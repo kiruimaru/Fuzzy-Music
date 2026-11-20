@@ -16,7 +16,7 @@ external-tool policies. Task: `tasks/platform-release-assets.md`.
 
 ### Checks
 
-Seven Node release tests, Linux wrapper argument/environment/missing-tool tests,
+Eight Node release tests, Linux wrapper argument/environment/missing-tool tests,
 Bash syntax, actionlint and whitespace checks passed. Local extraction of the
 published Windows EXE matched clean tagged-commit provenance and its SHA256.
 Frontend 37 tests/build and context smoke passed. PR #30 merged as `716b923`.
@@ -25,7 +25,12 @@ provenance with sidecars. Downloaded all six files and verified hashes and the
 EXE's byte-for-byte identity with the portable build. Linux compiled/bundled
 (80.50 MiB), but whole-ELF comparison rejected normal bundler processing before
 publication. The fix compares nonempty code/readonly-data sections and records
-both ELF hashes. The retry remains pending.
+both ELF hashes. A second candidate exposed Tauri's UNK-to-APP marker inside
+readonly data; only that exact marker is normalized, with rejection regressions
+for other data changes. Third workflow `44713298480` was cancelled on a slow
+Azure APT mirror; switched CI to the official HTTPS archive with bounded
+retries/timeouts and noninteractive, no-recommends installation. Local
+Rust 60 tests (four ignored), strict Clippy and rustfmt passed again.
 
 ### Next action
 

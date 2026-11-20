@@ -25,6 +25,15 @@ export function writeAsset(path, bytes) {
   writeFileSync(`${path}.sha256`, `${sha256(bytes)}  ${basename(path)}\n`);
 }
 
+export function verifyLinuxReadOnlyData(original, packaged) {
+  if (!original.length || !packaged.length) throw new Error("Empty ELF read-only data");
+  // tauri-utils/platform.rs embeds a mutable bundle-type string. The CLI
+  // resets the build output to UNK after producing the APP-tagged AppImage.
+  const normalize = (bytes) => Buffer.from(bytes.toString("latin1")
+    .replaceAll("__TAURI_BUNDLE_TYPE_VAR_APP", "__TAURI_BUNDLE_TYPE_VAR_UNK"), "latin1");
+  if (!normalize(original).equals(normalize(packaged))) throw new Error("Packaged ELF read-only data differs beyond the Tauri AppImage marker");
+}
+
 function gh(args) {
   return execFileSync("gh", args, { maxBuffer: 512 * 1024 * 1024 });
 }
@@ -46,14 +55,7 @@ function windows(tag, input, output, commit) {
   writeAsset(join(output, `${name}.provenance.json`), `${JSON.stringify(provenance, null, 2)}\n`);
 }
 
-function upload(tag, directory) {
-  versionFromTag(tag);
-  const repo = process.env.GITHUB_REPOSITORY;
-  if (!repo) throw new Error("GITHUB_REPOSITORY is required");
-  const release = JSON.parse(gh(["api", `repos/${repo}/releases/tags/${tag}`]));
-  if (release.immutable || release.draft) throw new Error("Release must be published and mutable");
-  const sourceName = `Fuzzy-Music-${versionFromTag(tag)}-corresponding-source.zip`;
-  if (!release.assets.some((asset) => asset.name === sourceName)) throw new Error("Matching application source archive is missing");
+export function verifyAssets(directory) {
   const files = readdirSync(directory);
   if (!files.length) throw new Error("No assets to publish");
   for (const name of files) {
@@ -66,6 +68,21 @@ function upload(tag, directory) {
     } else if (!files.includes(`${name}.sha256`)) {
       throw new Error(`Missing checksum: ${name}`);
     }
+  }
+  return files;
+}
+
+function upload(tag, directory) {
+  versionFromTag(tag);
+  const files = verifyAssets(directory);
+  const repo = process.env.GITHUB_REPOSITORY;
+  if (!repo) throw new Error("GITHUB_REPOSITORY is required");
+  const release = JSON.parse(gh(["api", `repos/${repo}/releases/tags/${tag}`]));
+  if (release.immutable || release.draft) throw new Error("Release must be published and mutable");
+  const sourceName = `Fuzzy-Music-${versionFromTag(tag)}-corresponding-source.zip`;
+  if (!release.assets.some((asset) => asset.name === sourceName)) throw new Error("Matching application source archive is missing");
+  for (const name of files) {
+    const local = readFileSync(join(directory, name));
     const existing = release.assets.find((asset) => asset.name === name);
     if (existing) {
       const published = gh(["release", "download", tag, "--repo", repo, "--pattern", name, "--output", "-"]);
@@ -82,5 +99,6 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
   const [mode, ...args] = process.argv.slice(2);
   if (mode === "windows") windows(...args);
   else if (mode === "upload") upload(...args);
-  else throw new Error("Expected windows or upload mode");
+  else if (mode === "linux-rodata") verifyLinuxReadOnlyData(...args.map((path) => readFileSync(path)));
+  else throw new Error("Expected windows, upload or linux-rodata mode");
 }

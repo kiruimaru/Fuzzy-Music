@@ -23,7 +23,27 @@ missing runtime), Bash syntax, actionlint and whitespace checks passed. The
 standalone Windows EXE extracted from the published ZIP matches the original
 tagged commit and executable SHA256.
 
-Pending PR merge, hosted packaging and public downloads.
+PR #30 merged as `716b923`. Workflow `44710709445` published the Windows
+EXE (15,822,336 bytes), runtime setup script and provenance with SHA256 sidecars.
+All six assets were downloaded again and verified; the public EXE is identical
+to the original portable executable. The AppImage built (80.50 MiB), but the
+first attempt correctly stopped before publication because the validation used
+whole-file identity despite linuxdeploy's ELF processing. The follow-up compares
+nonempty .text/.rodata and records both original and packaged ELF hashes.
+The second attempt also stopped before publication on Tauri's documented
+UNK-to-APP marker inside .rodata. The checker now normalizes only that exact
+marker and rejects unrelated changes; code remains byte-identical. A third
+workflow, `44713298480`, was cancelled after its Azure Ubuntu mirror throttled
+package downloads for over six minutes. The workflow now selects the official
+HTTPS archive, avoids recommends, and bounds network retries and install time.
+Failed candidates are retained only
+as explicitly non-release diagnostic Actions artifacts.
+
+A follow-up validates every local checksum before the first upload, with a
+regression covering an empty payload, missing checksum and a corrupt late file.
+Eight Node tests now pass. Frontend 37 tests/build and context smoke also passed.
+Local workspace Rust tests (60 passed, four ignored), strict Clippy and rustfmt
+passed again. Stripping the real local ELF preserved the checked sections.
 
 ## Handoff
 

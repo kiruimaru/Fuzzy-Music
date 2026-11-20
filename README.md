@@ -12,7 +12,10 @@ See [desktop setup and verification](docs/shell-development.md).
 
 The first public release targets Windows x64 portable. Download the application
 ZIP, not the corresponding-source ZIP, and run its included runtime setup script
-once before opening the EXE. See [release notes and limitations](docs/releases/v0.1.0.md)
+once before opening the EXE. Alternatively, download the separate
+`Fuzzy-Music-0.1.0-windows-x64.exe` and `setup-windows-runtime.ps1` together.
+The EXE is not an installer and still needs the tools and WebView2 runtime.
+See [release notes and limitations](docs/releases/v0.1.0.md)
 and [Windows setup](docs/windows-alpha.md). Linux can be built from source;
 this release does not provide a Linux binary or installer.
 

@@ -46,7 +46,18 @@ cd "$stage"
 "$output/$name" --appimage-extract >/dev/null
 test -x squashfs-root/usr/bin/tools/mpv
 test -x squashfs-root/usr/bin/tools/yt-dlp
-cmp "$app/target/release/fuzzy-shell" squashfs-root/usr/bin/fuzzy-shell
+# linuxdeploy strips ELF metadata and patches library lookup paths. Verify code
+# and read-only application data, then record the actual packaged binary hash.
+for section in .text .rodata; do
+  objcopy -O binary --only-section="$section" "$app/target/release/fuzzy-shell" "$stage/original$section"
+  objcopy -O binary --only-section="$section" squashfs-root/usr/bin/fuzzy-shell "$stage/packaged$section"
+  test -s "$stage/original$section"
+  if [[ $section == .rodata ]]; then
+    node "$packaging/scripts/release-assets.mjs" linux-rodata "$stage/original$section" "$stage/packaged$section"
+  else
+    cmp "$stage/original$section" "$stage/packaged$section"
+  fi
+done
 ./squashfs-root/usr/bin/tools/mpv --version
 ./squashfs-root/usr/bin/tools/yt-dlp --version
 
@@ -68,16 +79,16 @@ find /usr/share/doc -mindepth 2 -maxdepth 2 -name copyright -type f -print0 | wh
   cp "$file" "$stage/system-copyright/$package.txt"
 done
 rm -f "$stage/system-copyright/copyright"
-export OUTPUT="$output" TAG="$tag" PACKAGING="$packaging"
+export OUTPUT="$output" TAG="$tag" PACKAGING="$packaging" EXTRACTED="$stage/squashfs-root/usr/bin/fuzzy-shell"
 node --input-type=module <<'NODE'
 import { execFileSync } from 'node:child_process';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 const git = (dir, ...args) => execFileSync('git', ['-C', dir, ...args], { encoding: 'utf8' }).trim();
 const hash = (file) => createHash('sha256').update(readFileSync(file)).digest('hex');
-const { APP: app, OUTPUT: output, TAG: tag, PACKAGING: packaging } = process.env;
+const { APP: app, OUTPUT: output, TAG: tag, PACKAGING: packaging, EXTRACTED: extracted } = process.env;
 const name = `Fuzzy-Music-${tag.slice(1)}-linux-x86_64`;
-const provenance = { version: tag.slice(1), applicationCommit: git(app, 'rev-parse', 'HEAD'), applicationTree: git(app, 'rev-parse', 'HEAD^{tree}'), packagingCommit: git(packaging, 'rev-parse', 'HEAD'), executableSha256: hash(`${app}/target/release/fuzzy-shell`), appimageSha256: hash(`${output}/${name}.AppImage`), runtimeTools: 'host mpv and yt-dlp; not redistributed', correspondingSource: `Fuzzy-Music-${tag.slice(1)}-corresponding-source.zip`, buildSystem: 'Ubuntu 22.04 x86_64' };
+const provenance = { version: tag.slice(1), applicationCommit: git(app, 'rev-parse', 'HEAD'), applicationTree: git(app, 'rev-parse', 'HEAD^{tree}'), packagingCommit: git(packaging, 'rev-parse', 'HEAD'), executableSha256: hash(`${app}/target/release/fuzzy-shell`), packagedExecutableSha256: hash(extracted), appimageSha256: hash(`${output}/${name}.AppImage`), runtimeTools: 'host mpv and yt-dlp; not redistributed', correspondingSource: `Fuzzy-Music-${tag.slice(1)}-corresponding-source.zip`, buildSystem: 'Ubuntu 22.04 x86_64' };
 writeFileSync(`${output}/${name}.provenance.json`, `${JSON.stringify(provenance, null, 2)}\n`);
 NODE
 mkdir "$stage/packaging-source"

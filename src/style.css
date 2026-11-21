@@ -277,13 +277,13 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 
 .results { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 6px 6px 10px; }
 .results-head {
-  display: grid; grid-template-columns: 32px 44px minmax(0, 1fr) 28px 56px 36px 36px 36px;
+  display: grid; grid-template-columns: 32px 44px minmax(0, 1fr) 28px 56px 36px 36px 36px 36px;
   align-items: center; gap: 12px; padding: 10px 12px 6px;
   font-size: 11px; text-transform: uppercase; letter-spacing: .1em; color: #66708a;
 }
 .results ul { list-style: none; margin: 0; padding: 0; }
 .results li {
-  display: grid; grid-template-columns: 32px 44px minmax(0, 1fr) 28px 56px 36px 36px 36px;
+  display: grid; grid-template-columns: 32px 44px minmax(0, 1fr) 28px 56px 36px 36px 36px 36px;
   align-items: center; gap: 12px; padding: 8px 12px; border-radius: 10px;
   transition: background-color var(--motion-base) var(--ease-out);
 }
@@ -340,6 +340,9 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 }
 .session-queue li:has(.row-play:nth-last-child(5)) {
   grid-template-columns: 44px minmax(0, 1fr) repeat(5, 36px);
+}
+.session-queue li:has(.row-play:nth-last-child(6)) {
+  grid-template-columns: 44px minmax(0, 1fr) repeat(6, 36px);
 }
 .session-queue li > .row-play:first-of-type:nth-last-child(3) { grid-column: 4; }
 .liked { color: #ff8270; }
@@ -560,12 +563,13 @@ input[type="range"]:disabled::-webkit-slider-thumb { cursor: default; }
 
 @media (max-width: 560px) {
   .results-head { display: none; }
-  .results li { grid-template-columns: 40px minmax(0, 1fr) 22px 32px 32px 32px; gap: 4px; padding: 8px 4px; }
+  .results li { grid-template-columns: 40px minmax(0, 1fr) 22px 32px 32px 32px 32px; gap: 4px; padding: 8px 4px; }
   .results li .source-icon { width: 18px; height: 18px; }
   .results li .row-play, .session-queue li .row-play { width: 32px; height: 32px; }
   .session-queue li { grid-template-columns: 40px minmax(0, 1fr) 32px 32px; gap: 4px; }
   .session-queue li:has(.liked), .session-queue li:has(.row-play:nth-last-child(4)) { grid-template-columns: 40px minmax(0, 1fr) repeat(4, 32px); }
   .session-queue li:has(.row-play:nth-last-child(5)) { grid-template-columns: 40px minmax(0, 1fr) repeat(5, 32px); }
+  .session-queue li:has(.row-play:nth-last-child(6)) { grid-template-columns: 40px minmax(0, 1fr) repeat(6, 32px); }
   .row-index, .row-duration { display: none; }
   .timeline { grid-template-columns: minmax(0, 1fr) 76px; }
   .now-playing { max-width: 100px; }

@@ -18,6 +18,8 @@ vi.mock("./api", async (original) => ({
     playlistTracks: vi.fn(),
     artistTracks: vi.fn(),
     cancelArtists: vi.fn().mockResolvedValue(undefined),
+    relatedTracks: vi.fn(),
+    cancelRelated: vi.fn().mockResolvedValue(undefined),
     cancelPlaylists: vi.fn().mockResolvedValue(undefined),
     pause: vi.fn().mockResolvedValue(undefined), seek: vi.fn().mockResolvedValue(undefined),
     volume: vi.fn().mockResolvedValue(undefined),
@@ -65,7 +67,7 @@ afterEach(() => { cleanup(); vi.clearAllMocks(); });
 beforeEach(() => {
   vi.resetAllMocks();
   for (const method of [api.cancelSearch, api.stop, api.prepare, api.prefetch,
-    api.cancelPreparation, api.cancelPlaylists, api.cancelArtists, api.pause, api.seek, api.volume]) {
+    api.cancelPreparation, api.cancelPlaylists, api.cancelArtists, api.cancelRelated, api.pause, api.seek, api.volume]) {
     vi.mocked(method).mockResolvedValue(undefined);
   }
   vi.mocked(api.status).mockResolvedValue({
@@ -874,4 +876,69 @@ test("playlist authors link to their artist page", async () => {
   const hero = await screen.findByRole("region", { name: "Artist" });
   expect(within(hero).getByText("Curator")).toBeTruthy();
   expect(within(hero).getByRole("button", { name: "Play artist" })).toBeTruthy();
+});
+
+test("radio starts the seed track and queues similar tracks", async () => {
+  const similar = { ...track, id: "2", title: "Similar", sourceUrl: "https://soundcloud.com/other/similar" };
+  vi.mocked(api.search).mockResolvedValue({ tracks: [track], nextPageToken: null });
+  vi.mocked(api.relatedTracks).mockResolvedValue({ tracks: [similar] });
+  vi.mocked(api.play).mockResolvedValue(undefined);
+  render(<App settings={createMemorySettingsStore()} />);
+  search("music");
+  fireEvent.click(await screen.findByRole("button", { name: "Start radio from Example" }));
+  await waitFor(() => expect(api.relatedTracks).toHaveBeenCalled());
+  expect(vi.mocked(api.relatedTracks).mock.calls[0][1].id).toBe("1");
+  expect(vi.mocked(api.play).mock.calls[0][1].id).toBe("1");
+  await screen.findByText("1 / 2");
+});
+
+test("radio keeps extending the queue as it approaches the end", async () => {
+  const similar = { ...track, id: "2", title: "Similar", sourceUrl: "https://soundcloud.com/other/similar" };
+  const nextSimilar = { ...track, id: "3", title: "More", sourceUrl: "https://soundcloud.com/other/more" };
+  vi.mocked(api.search).mockResolvedValue({ tracks: [track], nextPageToken: null });
+  vi.mocked(api.relatedTracks)
+    .mockResolvedValueOnce({ tracks: [similar] })
+    .mockResolvedValueOnce({ tracks: [nextSimilar] })
+    .mockResolvedValue({ tracks: [] });
+  vi.mocked(api.play).mockResolvedValue(undefined);
+  vi.mocked(api.status).mockImplementation(async () => ({
+    generation: vi.mocked(api.play).mock.calls.at(-1)?.[0] ?? 0,
+    trackId: vi.mocked(api.play).mock.calls.at(-1)?.[1].id ?? null,
+    state: "playing", error: null, positionMs: 1000, durationMs: 180000, volume: 100, seekable: true,
+  }));
+  render(<App settings={createMemorySettingsStore()} />);
+  search("music");
+  fireEvent.click(await screen.findByRole("button", { name: "Start radio from Example" }));
+  await screen.findByText("1 / 3");
+  const calls = vi.mocked(api.relatedTracks).mock.calls;
+  expect(calls[0][1].id).toBe("1");
+  expect(calls[1][1].id).toBe("2");
+});
+
+test("radio refills the queue before the buffer runs empty", async () => {
+  const buffer = Array.from({ length: 11 }, (_, index) => ({
+    ...track,
+    id: String(index + 2),
+    title: `Related ${index + 2}`,
+    sourceUrl: `https://soundcloud.com/other/related-${index + 2}`,
+  }));
+  const deeper = { ...track, id: "13", title: "Deeper", sourceUrl: "https://soundcloud.com/other/deeper" };
+  vi.mocked(api.search).mockResolvedValue({ tracks: [track], nextPageToken: null });
+  vi.mocked(api.relatedTracks)
+    .mockResolvedValueOnce({ tracks: buffer })
+    .mockResolvedValue({ tracks: [deeper] });
+  vi.mocked(api.play).mockResolvedValue(undefined);
+  vi.mocked(api.status).mockImplementation(async () => ({
+    generation: vi.mocked(api.play).mock.calls.at(-1)?.[0] ?? 0,
+    trackId: vi.mocked(api.play).mock.calls.at(-1)?.[1].id ?? null,
+    state: "playing", error: null, positionMs: 1000, durationMs: 180000, volume: 100, seekable: true,
+  }));
+  render(<App settings={createMemorySettingsStore()} />);
+  search("music");
+  fireEvent.click(await screen.findByRole("button", { name: "Start radio from Example" }));
+  await screen.findByText("1 / 12");
+  fireEvent.click(screen.getByRole("button", { name: "Next track" }));
+  fireEvent.click(screen.getByRole("button", { name: "Next track" }));
+  await screen.findByText("3 / 13");
+  expect(vi.mocked(api.relatedTracks).mock.calls[1][1].id).toBe("12");
 });

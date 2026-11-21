@@ -61,6 +61,9 @@ personal background image with a live opacity slider; the file is copied into
 the app data directory and served through a narrowly scoped asset protocol.
 While a background is set, the sidebar and player bar turn into frosted glass so
 the artwork shows through the shell, and GIF images animate. See decision 0015.
+Any SoundCloud track can start a radio: the seed plays immediately, related
+tracks are appended automatically, and the queue keeps extending as playback
+approaches its end. See decision 0017.
 Integration checks and
 accepted review follow-ups
 are recorded in [`tasks/pr20-pr23-integration.md`](tasks/pr20-pr23-integration.md).

@@ -17,12 +17,16 @@ pub fn failure() -> AppError {
 }
 
 /// Keep the last mpv session log next to the app data for field diagnostics.
+/// Debug builds share the `dev` subdirectory with the isolated library.
 fn log_path() -> Option<PathBuf> {
     let base = std::env::var_os("APPDATA")
         .map(PathBuf::from)
         .or_else(|| std::env::var_os("XDG_STATE_HOME").map(PathBuf::from))
         .unwrap_or_else(std::env::temp_dir);
-    let directory = base.join("io.github.kiruimaru.fuzzy-music");
+    let directory = crate::data_root(
+        base.join("io.github.kiruimaru.fuzzy-music"),
+        cfg!(debug_assertions),
+    );
     std::fs::create_dir_all(&directory).ok()?;
     let path = directory.join("mpv.log");
     if std::fs::metadata(&path).is_ok_and(|meta| meta.len() > 2 * 1024 * 1024) {

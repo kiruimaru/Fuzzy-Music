@@ -30,6 +30,19 @@ pub fn storage_error() -> AppError {
     }
 }
 
+/// A database from a newer release is readable only after an application
+/// upgrade; retrying or picking another folder cannot help, so the renderer can
+/// show concrete recovery steps instead of a generic storage failure.
+pub fn newer_library_error() -> AppError {
+    AppError {
+        code: ErrorCode::LibraryTooNew,
+        message: "The music library was created by a newer Fuzzy Music version. \
+                  Update the app or restore an older library backup."
+            .into(),
+        retryable: false,
+    }
+}
+
 fn invalid() -> AppError {
     AppError {
         code: ErrorCode::InvalidInput,
@@ -142,7 +155,7 @@ impl Library {
             .pragma_query_value(None, "user_version", |row| row.get(0))
             .map_err(|_| storage_error())?;
         if version > 4 {
-            return Err(storage_error());
+            return Err(newer_library_error());
         }
         connection.execute_batch(
             "BEGIN IMMEDIATE;
@@ -1258,6 +1271,21 @@ mod tests {
         assert_eq!(settings.download_quality, DownloadQuality::Small);
         assert_eq!(settings.music_folder, "existing");
         assert_eq!(settings.theme, Theme::Dark);
+    }
+
+    #[test]
+    fn rejects_a_library_created_by_a_newer_version_with_a_specific_error() {
+        let dir = tempfile::tempdir().unwrap();
+        let connection = Connection::open(dir.path().join("library.sqlite")).unwrap();
+        connection.pragma_update(None, "user_version", 5).unwrap();
+        drop(connection);
+        let error = match Library::open(dir.path(), dir.path()) {
+            Ok(_) => panic!("a newer schema must not be opened"),
+            Err(error) => error,
+        };
+        assert_eq!(error.code, ErrorCode::LibraryTooNew);
+        assert!(!error.retryable);
+        assert!(error.message.contains("newer Fuzzy Music version"));
     }
 
     #[test]

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { api, safeMessage, type ArtistTracks, type LibraryEntry, type Playlist, type PlaylistEntry, type Track } from "./api";
+import { api, backgroundUrl, safeMessage, type ArtistTracks, type LibraryEntry, type Playlist, type PlaylistEntry, type Track } from "./api";
 import { Download, FolderOpen, Heart, ListMusic, ListPlus, RefreshCw, RotateCcw, SkipBack, SkipForward, Trash2, Volume2, X } from "lucide-react";
 import { settingsStore, validVolume, type AppSettings, type SettingsStore } from "./settings";
 import blackMascot from "./assets/black.png";
@@ -142,6 +142,8 @@ export function App({ settings = settingsStore }: { settings?: SettingsStore }) 
   const prepareGeneration = useRef(generationBase);
   const preparedKey = useRef("");
   const observedTransitions = useRef(0);
+  const recoveryAttempts = useRef(0);
+  const recoveryActive = useRef(false);
   const lookaheadGeneration = useRef(generationBase);
   const lookaheadKey = useRef("");
   const lookaheadTime = useRef(0);
@@ -155,6 +157,7 @@ export function App({ settings = settingsStore }: { settings?: SettingsStore }) 
   const [settingsError, setSettingsError] = useState("");
   const preferredVolume = useRef(100);
   const settingsWrites = useRef(Promise.resolve());
+  const opacityTimer = useRef<number | null>(null);
   const pendingVolume = useRef<{ generation: number; value: number } | null>(null);
   const volumeSending = useRef(false);
   const [library, setLibrary] = useState<LibraryEntry[]>([]);
@@ -170,6 +173,27 @@ export function App({ settings = settingsStore }: { settings?: SettingsStore }) 
   useEffect(() => {
     document.documentElement.dataset.theme = preferences.theme ?? "dark";
   }, [preferences.theme]);
+
+  const backgroundOpacity = preferences.backgroundOpacity ?? 60;
+
+  useEffect(() => {
+    const root = document.documentElement;
+    root.style.setProperty(
+      "--bg-image",
+      preferences.backgroundImage ? `url("${backgroundUrl(preferences.backgroundImage)}")` : "none",
+    );
+    root.style.setProperty("--bg-opacity", `${backgroundOpacity}%`);
+    root.classList.toggle("has-background", Boolean(preferences.backgroundImage));
+    const extension = preferences.backgroundImage?.split(".").pop()?.toLowerCase() ?? "";
+    root.classList.toggle(
+      "has-animated-background",
+      ["gif", "webp", "avif"].includes(extension),
+    );
+  }, [preferences.backgroundImage, backgroundOpacity]);
+
+  useEffect(() => () => {
+    if (opacityTimer.current !== null) window.clearTimeout(opacityTimer.current);
+  }, []);
 
   useEffect(() => {
     if (!queueOpen) return;
@@ -247,8 +271,31 @@ export function App({ settings = settingsStore }: { settings?: SettingsStore }) 
           setDuration(status.durationMs ?? null);
           setVolume(status.volume ?? 100);
           setSeekable(status.seekable ?? false);
-          if (status.state === "error") setPlayError(status.error ?? "Playback failed. Please retry.");
-          if (status.state === "error") autoAdvance.current = false;
+          if (status.state === "error") {
+            setPlayError(status.error ?? "Playback failed. Please retry.");
+            // A failed transition must not end the whole session: try the next
+            // track (or the current one at the queue end) once or twice.
+            if (!recoveryActive.current && autoAdvance.current && recoveryAttempts.current < 2) {
+              const nextIndex = indexRef.current + 1;
+              const next = queueRef.current[nextIndex];
+              const target = next ?? queueRef.current[indexRef.current];
+              if (target) {
+                recoveryAttempts.current += 1;
+                recoveryActive.current = true;
+                if (next) {
+                  indexRef.current = nextIndex;
+                  setQueueIndex(nextIndex);
+                }
+                preparedKey.current = "";
+                void play(target, true, true);
+              } else {
+                autoAdvance.current = false;
+              }
+            }
+          } else {
+            recoveryActive.current = false;
+            if (status.state === "playing") recoveryAttempts.current = 0;
+          }
           if (playbackOrigin.current === "playlist" && (status.state === "playing" || status.state === "paused")) {
             const next = queueRef.current[indexRef.current + 1];
             const neighbours: Track[] = [];
@@ -439,7 +486,7 @@ export function App({ settings = settingsStore }: { settings?: SettingsStore }) 
       aria-label={`Open artist ${name}`} onClick={() => void loadArtist(url)}>{name}</button>;
   }
 
-  async function play(track: Track, fromQueue = false) {
+  async function play(track: Track, fromQueue = false, forceFresh = false) {
     if (!settingsLoaded.current) return;
     if (!fromQueue) {
       const entry = addToQueue(track);
@@ -469,7 +516,7 @@ export function App({ settings = settingsStore }: { settings?: SettingsStore }) 
       if (local) await api.playLibrary(generation, local.id, preferredVolume.current);
       else if (track.source === "local") throw { code: "storage_failed" };
       else await api.play(generation, track, {
-        fresh: playbackOrigin.current === "session", volume: preferredVolume.current,
+        fresh: forceFresh || playbackOrigin.current === "session", volume: preferredVolume.current,
       });
       if (generation === playbackGeneration.current) setPlayback("starting");
     } catch (error) {
@@ -633,6 +680,32 @@ export function App({ settings = settingsStore }: { settings?: SettingsStore }) 
       setSettingsError("");
       if (patch.musicFolder) await scanMusic();
     } catch { setSettingsError("Could not save settings."); }
+  }
+
+  function changeBackgroundOpacity(value: number) {
+    if (!Number.isFinite(value)) return;
+    const next = Math.round(Math.min(100, Math.max(0, value)));
+    setPreferences(current => ({ ...current, backgroundOpacity: next }));
+    if (opacityTimer.current !== null) window.clearTimeout(opacityTimer.current);
+    // Persist after the drag settles; the preview itself updates immediately.
+    opacityTimer.current = window.setTimeout(() => {
+      opacityTimer.current = null;
+      void updatePreferences({ backgroundOpacity: next });
+    }, 300);
+  }
+
+  async function chooseBackground() {
+    try {
+      const path = await api.chooseBackground();
+      if (path) await updatePreferences({ backgroundImage: path });
+    } catch { setSettingsError("Could not load the background image."); }
+  }
+
+  async function clearBackground() {
+    try {
+      await api.clearBackground();
+      await updatePreferences({ backgroundImage: "" });
+    } catch { setSettingsError("Could not remove the background image."); }
   }
 
   async function scanMusic() {
@@ -870,6 +943,19 @@ export function App({ settings = settingsStore }: { settings?: SettingsStore }) 
           <option value="dark">Dark</option>
           <option value="light">Light</option>
         </select>
+        <h3>Player background</h3>
+        <p className="results-status">Choose any image — PNG, JPEG, WebP, animated GIF, BMP, AVIF or SVG. Move the slider to set how visible it is; the change applies while you drag.</p>
+        <div className="background-setting">
+          <button className="ghost" onClick={() => void chooseBackground()}>Choose background image</button>
+          {preferences.backgroundImage && <button className="ghost" onClick={() => void clearBackground()}>Remove background image</button>}
+          {preferences.backgroundImage && <img className="background-preview" src={backgroundUrl(preferences.backgroundImage)} alt="Current background" />}
+        </div>
+        <label htmlFor="background-opacity">Background opacity</label>
+        <div className="background-opacity">
+          <input id="background-opacity" type="range" min="0" max="100" step="1"
+            value={backgroundOpacity} onChange={event => changeBackgroundOpacity(Number(event.target.value))} />
+          <span>{backgroundOpacity}%</span>
+        </div>
         <label>Music folder</label>
         <div className="folder-setting"><span>{preferences.musicFolder ?? "Unavailable"}</span>
           <button className="row-play" title="Choose music folder" aria-label="Choose music folder" onClick={() => void (async () => {

@@ -1,6 +1,6 @@
 //! Bounded HLS startup segments, kept only in memory and served on loopback.
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     io::{Read, Write},
     net::{TcpListener, TcpStream},
     sync::{
@@ -26,6 +26,8 @@ struct Entry {
 }
 struct State {
     entries: Vec<Entry>,
+    /// Keys the player is reading right now; they must never be evicted.
+    pinned: HashSet<String>,
 }
 pub struct AudioCache {
     state: Arc<Mutex<State>>,
@@ -40,6 +42,7 @@ impl AudioCache {
         let port = listener.local_addr().ok()?.port();
         let state = Arc::new(Mutex::new(State {
             entries: Vec::new(),
+            pinned: HashSet::new(),
         }));
         let server_state = state.clone();
         std::thread::spawn(move || {
@@ -66,12 +69,30 @@ impl AudioCache {
         if let Ok(mut state) = self.state.lock() {
             self.epoch.fetch_add(1, Ordering::SeqCst);
             state.entries.clear();
+            state.pinned.clear();
+        }
+    }
+    /// Keep an entry alive while mpv is reading it. Pinned entries survive both
+    /// eviction and expiry so a long track cannot lose its startup segments.
+    pub fn pin(&self, key: &str) {
+        if let Ok(mut state) = self.state.lock() {
+            state.pinned.insert(key.to_owned());
+        }
+    }
+    pub fn unpin(&self, key: &str) {
+        if let Ok(mut state) = self.state.lock() {
+            state.pinned.remove(key);
         }
     }
     pub fn get(&self, key: &str) -> Option<String> {
         let mut state = self.state.lock().ok()?;
         // Expired entries cannot become valid again; drop them on lookup.
-        state.entries.retain(|e| Instant::now() < e.valid_until);
+        let state = &mut *state;
+        let expired = |entry: &Entry| Instant::now() >= entry.valid_until;
+        let pinned = &state.pinned;
+        state
+            .entries
+            .retain(|entry| !expired(entry) || pinned.contains(&entry.key));
         let entry = state.entries.iter().find(|e| e.key == key)?;
         let name = entry.files.keys().find(|s| s.ends_with("/index.m3u8"))?;
         Some(format!("{}{name}", self.base))
@@ -279,7 +300,7 @@ impl AudioCache {
             }
             state.entries.retain(|e| e.key != key);
             if state.entries.len() >= MAX_TRACKS {
-                state.entries.remove(0);
+                evict_one(&mut state);
             }
             state.entries.push(Entry {
                 key: key.to_owned(),
@@ -287,6 +308,17 @@ impl AudioCache {
                 files,
             });
         }
+    }
+}
+fn evict_one(state: &mut State) {
+    let State { entries, pinned } = state;
+    if let Some(index) = entries
+        .iter()
+        .position(|entry| !pinned.contains(&entry.key))
+    {
+        entries.remove(index);
+    } else {
+        entries.remove(0);
     }
 }
 fn url_lifetime(url: &Url, fallback: Duration) -> Duration {
@@ -529,5 +561,22 @@ mod tests {
         cache.clear();
         assert!(cache.get("track").is_none());
         assert!(agent.get(&url).call().is_err());
+    }
+    #[test]
+    fn eviction_skips_pinned_entries() {
+        let cache = AudioCache::new(&fuzzy_application::NetworkPolicy::default()).unwrap();
+        let mut state = cache.state.lock().unwrap();
+        for index in 0..MAX_TRACKS {
+            state.entries.push(Entry {
+                key: format!("k{index}"),
+                valid_until: Instant::now() + Duration::from_secs(60),
+                files: HashMap::new(),
+            });
+        }
+        state.pinned.insert("k0".into());
+        evict_one(&mut state);
+        assert!(state.entries.iter().any(|entry| entry.key == "k0"));
+        assert!(!state.entries.iter().any(|entry| entry.key == "k1"));
+        assert_eq!(state.entries.len(), MAX_TRACKS - 1);
     }
 }

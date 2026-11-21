@@ -1,4 +1,4 @@
-import { invoke } from "@tauri-apps/api/core";
+import { convertFileSrc, invoke } from "@tauri-apps/api/core";
 
 export type Track = {
   id: string;
@@ -86,6 +86,8 @@ export const api = {
   retryDownload: (id: number) => invoke<void>("retry_download", { id }),
   removeTrack: (id: number) => invoke<void>("remove_library_track", { id }),
   chooseFolder: () => invoke<string | null>("choose_music_folder"),
+  chooseBackground: () => invoke<string | null>("choose_background_image"),
+  clearBackground: () => invoke<void>("clear_background_image"),
   playLibrary: (generation: number, id: number, volume: number) =>
     invoke<void>("play_library_track", { generation, id, volume }),
   search: (generation: number, query: string) =>
@@ -125,6 +127,10 @@ export const api = {
   seek: (generation: number, positionMs: number) => invoke<void>("update_playback", { generation, action: { type: "seek", position_ms: positionMs } }),
   volume: (generation: number, volume: number) => invoke<void>("update_playback", { generation, action: { type: "volume", volume } }),
 };
+
+export function backgroundUrl(path: string) {
+  return convertFileSrc(path);
+}
 
 export function safeMessage(error: unknown): string {
   if (typeof error === "object" && error !== null && "code" in error) {

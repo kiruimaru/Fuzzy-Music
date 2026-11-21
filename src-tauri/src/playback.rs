@@ -16,6 +16,21 @@ pub fn failure() -> AppError {
     }
 }
 
+/// Keep the last mpv session log next to the app data for field diagnostics.
+fn log_path() -> Option<PathBuf> {
+    let base = std::env::var_os("APPDATA")
+        .map(PathBuf::from)
+        .or_else(|| std::env::var_os("XDG_STATE_HOME").map(PathBuf::from))
+        .unwrap_or_else(std::env::temp_dir);
+    let directory = base.join("io.github.kiruimaru.fuzzy-music");
+    std::fs::create_dir_all(&directory).ok()?;
+    let path = directory.join("mpv.log");
+    if std::fs::metadata(&path).is_ok_and(|meta| meta.len() > 2 * 1024 * 1024) {
+        let _ = std::fs::remove_file(&path);
+    }
+    Some(path)
+}
+
 pub struct Snapshot {
     pub state: &'static str,
     pub position_ms: u64,
@@ -95,6 +110,10 @@ impl Player {
             network.apply_with_loopback_bypass(&mut command);
         }
         command.arg(format!("--input-ipc-server={}", endpoint.display()));
+        if let Some(log) = log_path() {
+            command.arg(format!("--log-file={}", log.display()));
+            command.arg("--msg-level=all=info");
+        }
         command.arg(format!("--volume={volume}"));
         command.args([
             "--no-config",

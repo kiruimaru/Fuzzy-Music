@@ -72,6 +72,8 @@ pub struct AppSettings {
     pub download_quality: DownloadQuality,
     pub music_folder: String,
     pub theme: Theme,
+    pub background_image: String,
+    pub background_opacity: f64,
 }
 
 #[derive(Clone, Copy, Debug, Default, Serialize, Deserialize, PartialEq)]
@@ -89,6 +91,8 @@ pub struct SettingsPatch {
     pub download_quality: Option<DownloadQuality>,
     pub music_folder: Option<String>,
     pub theme: Option<Theme>,
+    pub background_image: Option<String>,
+    pub background_opacity: Option<f64>,
 }
 
 #[derive(Clone, Serialize, Deserialize)]
@@ -137,7 +141,7 @@ impl Library {
         let version: u32 = connection
             .pragma_query_value(None, "user_version", |row| row.get(0))
             .map_err(|_| storage_error())?;
-        if version > 3 {
+        if version > 4 {
             return Err(storage_error());
         }
         connection.execute_batch(
@@ -178,6 +182,17 @@ impl Library {
                 )
                 .map_err(|_| storage_error())?;
         }
+        if version < 4 {
+            connection
+                .execute_batch(
+                    "BEGIN IMMEDIATE;
+                 ALTER TABLE settings ADD COLUMN background_image TEXT NOT NULL DEFAULT '';
+                 ALTER TABLE settings ADD COLUMN background_opacity REAL NOT NULL DEFAULT 60;
+                 PRAGMA user_version=4;
+                 COMMIT;",
+                )
+                .map_err(|_| storage_error())?;
+        }
         connection
             .execute(
                 "INSERT OR IGNORE INTO settings(id,volume,download_quality,music_folder) VALUES(1,100,'\"best\"',?1)",
@@ -197,11 +212,27 @@ impl Library {
 
     pub fn settings(&self) -> Result<AppSettings, AppError> {
         let connection = self.connection.lock().map_err(|_| storage_error())?;
-        let (volume, quality, music_folder, theme): (f64, String, String, String) = connection
+        let (volume, quality, music_folder, theme, background_image, background_opacity): (
+            f64,
+            String,
+            String,
+            String,
+            String,
+            f64,
+        ) = connection
             .query_row(
-                "SELECT volume,download_quality,music_folder,theme FROM settings WHERE id=1",
+                "SELECT volume,download_quality,music_folder,theme,background_image,background_opacity FROM settings WHERE id=1",
                 [],
-                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
+                |row| {
+                    Ok((
+                        row.get(0)?,
+                        row.get(1)?,
+                        row.get(2)?,
+                        row.get(3)?,
+                        row.get(4)?,
+                        row.get(5)?,
+                    ))
+                },
             )
             .map_err(|_| storage_error())?;
         Ok(AppSettings {
@@ -209,6 +240,8 @@ impl Library {
             download_quality: serde_json::from_str(&quality).map_err(|_| storage_error())?,
             music_folder,
             theme: serde_json::from_str(&theme).map_err(|_| storage_error())?,
+            background_image,
+            background_opacity,
         })
     }
 
@@ -227,6 +260,20 @@ impl Library {
             // Verify write access without touching existing user files.
             tempfile::NamedTempFile::new_in(path).map_err(|_| storage_error())?;
         }
+        if let Some(image) = &patch.background_image
+            && !image.is_empty()
+        {
+            let path = Path::new(image);
+            if !path.is_absolute() || !path.is_file() {
+                return Err(invalid());
+            }
+        }
+        if patch
+            .background_opacity
+            .is_some_and(|value| !value.is_finite() || !(0.0..=100.0).contains(&value))
+        {
+            return Err(invalid());
+        }
         let connection = self.connection.lock().map_err(|_| storage_error())?;
         let quality = patch
             .download_quality
@@ -240,8 +287,17 @@ impl Library {
             .map_err(|_| invalid())?;
         connection.execute(
             "UPDATE settings SET volume=COALESCE(?1,volume), download_quality=COALESCE(?2,download_quality),
-             music_folder=COALESCE(?3,music_folder), theme=COALESCE(?4,theme) WHERE id=1",
-            params![patch.volume, quality, patch.music_folder, theme],
+             music_folder=COALESCE(?3,music_folder), theme=COALESCE(?4,theme),
+             background_image=COALESCE(?5,background_image),
+             background_opacity=COALESCE(?6,background_opacity) WHERE id=1",
+            params![
+                patch.volume,
+                quality,
+                patch.music_folder,
+                theme,
+                patch.background_image,
+                patch.background_opacity
+            ],
         ).map_err(|_| storage_error())?;
         drop(connection);
         self.settings()
@@ -1134,6 +1190,56 @@ mod tests {
         );
         library.favourite(track("one"), false).unwrap();
         assert!(!library.entry(id).unwrap().favourite);
+    }
+
+    #[test]
+    fn background_settings_are_validated_and_persisted() {
+        let dir = tempfile::tempdir().unwrap();
+        let music = dir.path().join("music");
+        fs::create_dir(&music).unwrap();
+        let library = Library::open(dir.path(), &music).unwrap();
+        assert_eq!(library.settings().unwrap().background_opacity, 60.0);
+        assert!(library.settings().unwrap().background_image.is_empty());
+        let image = dir.path().join("photo.jpg");
+        fs::write(&image, b"image-bytes").unwrap();
+        let image = image.to_string_lossy().into_owned();
+        assert!(
+            library
+                .update_settings(SettingsPatch {
+                    background_opacity: Some(101.0),
+                    ..Default::default()
+                })
+                .is_err()
+        );
+        assert!(
+            library
+                .update_settings(SettingsPatch {
+                    background_image: Some("relative.png".into()),
+                    ..Default::default()
+                })
+                .is_err()
+        );
+        let updated = library
+            .update_settings(SettingsPatch {
+                background_image: Some(image.clone()),
+                background_opacity: Some(42.0),
+                ..Default::default()
+            })
+            .unwrap();
+        assert_eq!(updated.background_image, image);
+        assert_eq!(updated.background_opacity, 42.0);
+        drop(library);
+        let library = Library::open(dir.path(), &music).unwrap();
+        assert_eq!(library.settings().unwrap().background_image, image);
+        assert_eq!(library.settings().unwrap().background_opacity, 42.0);
+        let cleared = library
+            .update_settings(SettingsPatch {
+                background_image: Some(String::new()),
+                ..Default::default()
+            })
+            .unwrap();
+        assert!(cleared.background_image.is_empty());
+        assert_eq!(cleared.background_opacity, 42.0);
     }
 
     #[test]

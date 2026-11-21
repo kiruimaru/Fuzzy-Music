@@ -727,8 +727,28 @@ export function App({ settings = settingsStore }: { settings?: SettingsStore }) 
     playback === "error" ? playError : "Idle";
 
   const currentSavedPlaylist = openPlaylist ? savedPlaylist(openPlaylist.playlist) : undefined;
+  const openAlbum = openPlaylist?.playlist.isAlbum ?? false;
   const libraryEntries = library.filter(entry => view === "favourites" ? entry.favourite : entry.availableOffline || entry.track.source === "local");
   const libraryTracks = libraryEntries.map(entry => entry.track);
+
+  function savedPlaylistActions(playLabel: string) {
+    if (!openPlaylist) return null;
+    return <div className={openAlbum ? "playlist-actions album-actions" : "playlist-actions"}>
+      <button className="primary" onClick={() => playList(tracks)} disabled={!tracks.length || !settingsReady}>{playLabel}</button>
+      <button className={currentSavedPlaylist?.favourite ? "ghost small liked" : "ghost small"}
+        title={currentSavedPlaylist?.favourite ? `Remove playlist ${openPlaylist.playlist.title} from favourites` : `Favourite playlist ${openPlaylist.playlist.title}`}
+        aria-label={currentSavedPlaylist?.favourite ? `Remove playlist ${openPlaylist.playlist.title} from favourites` : `Favourite playlist ${openPlaylist.playlist.title}`}
+        onClick={() => void togglePlaylistFavourite(openPlaylist.playlist)}><Heart /></button>
+      {currentSavedPlaylist?.state === "downloading"
+        ? <button className="ghost small" title={`Cancel download of playlist ${openPlaylist.playlist.title}`} aria-label={`Cancel download of playlist ${openPlaylist.playlist.title}`}
+            onClick={() => void cancelPlaylistDownload(openPlaylist.playlist)}><X /></button>
+        : <button className="ghost small" disabled={!tracks.length}
+            title={`Download playlist ${openPlaylist.playlist.title}`} aria-label={`Download playlist ${openPlaylist.playlist.title}`}
+            onClick={() => void downloadPlaylist(openPlaylist.playlist)}><Download /></button>}
+      {currentSavedPlaylist && currentSavedPlaylist.total > 0 &&
+        <span className="playlist-by">{currentSavedPlaylist.state === "ready" ? "Available offline" : `${currentSavedPlaylist.downloaded} of ${currentSavedPlaylist.total} downloaded`}</span>}
+    </div>;
+  }
 
   function trackRows(list: Track[]) {
     return <ul>
@@ -919,47 +939,57 @@ export function App({ settings = settingsStore }: { settings?: SettingsStore }) 
       {view === "playlists" && !openPlaylist && playlistLoading && <p className="results-status">Loading playlist...</p>}
 
       {openPlaylist &&
-        <section className="playlist-header">
+        <section className={openAlbum ? "playlist-header album-header" : "playlist-header"} aria-label={openAlbum ? "Album" : undefined}>
           <button className="ghost small" onClick={() => {
             setOpenPlaylist(null);
             setTracks([]);
             setSearchState(playlists.length ? "ready" : "idle");
           }}>← {openArtist ? "Back to artist" : "Back to playlists"}</button>
-          <div className="playlist-hero">
-            {openPlaylist.playlist.artworkUrl
-              ? <img className="playlist-hero-cover" src={openPlaylist.playlist.artworkUrl} alt="" />
-              : <div className="playlist-hero-cover artwork-fallback" aria-hidden="true">♪</div>}
-            <div>
-              <p className="eyebrow">Playlist</p>
-              <h2>{openPlaylist.playlist.title}</h2>
-              <p className="playlist-by">
-                {artistLink(openPlaylist.playlist.author, soundcloudArtistUrl(openPlaylist.playlist.sourceUrl), "artist-link inline")} · {tracks.length} of{" "}
-                {openPlaylist.playlist.trackCount ?? tracks.length}{" "}
-                {(openPlaylist.playlist.trackCount ?? tracks.length) === 1 ? "track" : "tracks"}
-              </p>
-              {openPlaylist.skipped > 0 &&
-                <p className="playlist-note">
-                  {openPlaylist.skipped === 1
-                    ? "1 track is unavailable and was skipped."
-                    : `${openPlaylist.skipped} tracks are unavailable and were skipped.`}
-                </p>}
-            </div>
-          </div>
-          <div className="playlist-actions">
-            <button className="primary" onClick={() => playList(tracks) } disabled={!tracks.length || !settingsReady}>Play playlist</button>
-            <button className={currentSavedPlaylist?.favourite ? "ghost small liked" : "ghost small"}
-              title={currentSavedPlaylist?.favourite ? `Remove playlist ${openPlaylist.playlist.title} from favourites` : `Favourite playlist ${openPlaylist.playlist.title}`}
-              aria-label={currentSavedPlaylist?.favourite ? `Remove playlist ${openPlaylist.playlist.title} from favourites` : `Favourite playlist ${openPlaylist.playlist.title}`}
-              onClick={() => void togglePlaylistFavourite(openPlaylist.playlist)}><Heart /></button>
-            {currentSavedPlaylist?.state === "downloading"
-              ? <button className="ghost small" title={`Cancel download of playlist ${openPlaylist.playlist.title}`} aria-label={`Cancel download of playlist ${openPlaylist.playlist.title}`}
-                  onClick={() => void cancelPlaylistDownload(openPlaylist.playlist)}><X /></button>
-              : <button className="ghost small" disabled={!tracks.length}
-                  title={`Download playlist ${openPlaylist.playlist.title}`} aria-label={`Download playlist ${openPlaylist.playlist.title}`}
-                  onClick={() => void downloadPlaylist(openPlaylist.playlist)}><Download /></button>}
-            {currentSavedPlaylist && currentSavedPlaylist.total > 0 &&
-              <span className="playlist-by">{currentSavedPlaylist.state === "ready" ? "Available offline" : `${currentSavedPlaylist.downloaded} of ${currentSavedPlaylist.total} downloaded`}</span>}
-          </div>
+          {openAlbum
+            ? <div className="album-banner">
+                {openPlaylist.playlist.artworkUrl && <img className="album-backdrop" src={openPlaylist.playlist.artworkUrl} alt="" aria-hidden="true" />}
+                {openPlaylist.playlist.artworkUrl
+                  ? <img className="album-cover" src={openPlaylist.playlist.artworkUrl} alt="" />
+                  : <div className="album-cover artwork-fallback" aria-hidden="true">♪</div>}
+                <div className="album-info">
+                  <p className="eyebrow">Album</p>
+                  <h2>{openPlaylist.playlist.title}</h2>
+                  <p className="album-stats">
+                    {artistLink(openPlaylist.playlist.author, soundcloudArtistUrl(openPlaylist.playlist.sourceUrl), "artist-link inline")} · {tracks.length} of{" "}
+                    {openPlaylist.playlist.trackCount ?? tracks.length}{" "}
+                    {(openPlaylist.playlist.trackCount ?? tracks.length) === 1 ? "track" : "tracks"}
+                    {openPlaylist.playlist.durationMs !== null ? ` · ${time(openPlaylist.playlist.durationMs)}` : ""}
+                  </p>
+                  {openPlaylist.skipped > 0 &&
+                    <p className="playlist-note">
+                      {openPlaylist.skipped === 1
+                        ? "1 track is unavailable and was skipped."
+                        : `${openPlaylist.skipped} tracks are unavailable and were skipped.`}
+                    </p>}
+                  {savedPlaylistActions("Play album")}
+                </div>
+              </div>
+            : <div className="playlist-hero">
+                {openPlaylist.playlist.artworkUrl
+                  ? <img className="playlist-hero-cover" src={openPlaylist.playlist.artworkUrl} alt="" />
+                  : <div className="playlist-hero-cover artwork-fallback" aria-hidden="true">♪</div>}
+                <div>
+                  <p className="eyebrow">Playlist</p>
+                  <h2>{openPlaylist.playlist.title}</h2>
+                  <p className="playlist-by">
+                    {artistLink(openPlaylist.playlist.author, soundcloudArtistUrl(openPlaylist.playlist.sourceUrl), "artist-link inline")} · {tracks.length} of{" "}
+                    {openPlaylist.playlist.trackCount ?? tracks.length}{" "}
+                    {(openPlaylist.playlist.trackCount ?? tracks.length) === 1 ? "track" : "tracks"}
+                  </p>
+                  {openPlaylist.skipped > 0 &&
+                    <p className="playlist-note">
+                      {openPlaylist.skipped === 1
+                        ? "1 track is unavailable and was skipped."
+                        : `${openPlaylist.skipped} tracks are unavailable and were skipped.`}
+                    </p>}
+                </div>
+              </div>}
+          {!openAlbum && savedPlaylistActions("Play playlist")}
         </section>}
 
       {view === "tracks" && openArtist && !openPlaylist &&

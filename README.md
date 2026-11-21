@@ -54,7 +54,10 @@ which uses a dedicated banner layout rather than the playlist header and
 separates the catalog into Tracks, Albums and Playlists tabs with counts. Play
 starts their list so the next track follows automatically, and the same list
 behavior applies to search results, playlists, Favourites and the music library.
-See decision 0012. Integration checks and accepted review follow-ups
+See decision 0012. Opening an album uses its own cover-first banner with a large
+artwork, blurred backdrop, total duration and Play album action, while regular
+playlists keep the compact header. See decision 0014. Integration checks and
+accepted review follow-ups
 are recorded in [`tasks/pr20-pr23-integration.md`](tasks/pr20-pr23-integration.md).
 Session queue behavior and #22 acceptance are recorded in
 [`tasks/playback-queue-22.md`](tasks/playback-queue-22.md).

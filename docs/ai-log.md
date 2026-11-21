@@ -984,4 +984,10 @@ the minimal Tauri shell.
 - Radio ends on another list, a session-queue selection or Stop; requests carry their own generation and are cancelled when radio ends. The endpoint, id validation and local-source rejection are covered by tests.
 - Verification: frontend 41 tests passed; Rust workspace 63 passed, 4 ignored; rustfmt and strict clippy clean; Tauri debug build passed.
 
+## 2026-11-21 — Library data isolation and newer-schema errors
+
+- The published 0.1.0 could not open a library that debug builds had migrated to schema 4; the guard returned a generic storage error and the folder picker failed without a reason. Debug builds now keep the library database, copied background images and the mpv session log in a `dev` subdirectory of the application data directory, while release builds keep the original location.
+- A database written by a newer application version now returns the non-retryable `library_too_new` code. The setup error is kept in the managed library state, so settings, library entries and the folder picker all report the same actionable message; the renderer shows it only for this code.
+- Verification: frontend 42 tests passed; Rust workspace 65 passed, 4 ignored; rustfmt and strict clippy clean; Tauri debug build passed (CSS 21.73 kB, JS 276.37 kB).
+
 

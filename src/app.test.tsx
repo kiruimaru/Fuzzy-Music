@@ -942,3 +942,11 @@ test("radio refills the queue before the buffer runs empty", async () => {
   await screen.findByText("3 / 13");
   expect(vi.mocked(api.relatedTracks).mock.calls[1][1].id).toBe("12");
 });
+
+test("a library created by a newer version explains how to recover", async () => {
+  vi.mocked(api.library).mockRejectedValue({ code: "library_too_new" });
+  render(<App settings={createMemorySettingsStore()} />);
+  const alert = await screen.findByRole("alert");
+  expect(alert.textContent).toContain("newer Fuzzy Music version");
+  expect(alert.textContent).toContain("restore an older library backup");
+});

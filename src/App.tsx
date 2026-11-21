@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import { api, backgroundUrl, safeMessage, type ArtistTracks, type LibraryEntry, type Playlist, type PlaylistEntry, type Track } from "./api";
+import { api, backgroundUrl, isLibraryTooNew, safeMessage, type ArtistTracks, type LibraryEntry, type Playlist, type PlaylistEntry, type Track } from "./api";
 import { Download, FolderOpen, Heart, ListMusic, ListPlus, Radio, RefreshCw, RotateCcw, SkipBack, SkipForward, Trash2, Volume2, X } from "lucide-react";
 import { settingsStore, validVolume, type AppSettings, type SettingsStore } from "./settings";
 import blackMascot from "./assets/black.png";
@@ -222,7 +222,9 @@ export function App({ settings = settingsStore }: { settings?: SettingsStore }) 
       setLibrary(entries);
       setSavedPlaylists(playlists);
       setLibraryError("");
-    } catch { setLibraryError("Could not load the music library."); }
+    } catch (error) {
+      setLibraryError(isLibraryTooNew(error) ? safeMessage(error) : "Could not load the music library.");
+    }
   }
 
   useEffect(() => {
@@ -239,8 +241,10 @@ export function App({ settings = settingsStore }: { settings?: SettingsStore }) 
       preferredVolume.current = value.volume;
       setVolume(value.volume);
       setPreferences(value);
-    }).catch(() => {
-      if (!disposed) setSettingsError("Could not load volume settings.");
+    }).catch(error => {
+      if (!disposed) {
+        setSettingsError(isLibraryTooNew(error) ? safeMessage(error) : "Could not load volume settings.");
+      }
     }).finally(() => {
       if (!disposed) {
         settingsLoaded.current = true;
@@ -1046,7 +1050,7 @@ export function App({ settings = settingsStore }: { settings?: SettingsStore }) 
         <div className="folder-setting"><span>{preferences.musicFolder ?? "Unavailable"}</span>
           <button className="row-play" title="Choose music folder" aria-label="Choose music folder" onClick={() => void (async () => {
             try { const folder = await api.chooseFolder(); if (folder) await updatePreferences({ musicFolder: folder }); }
-            catch { setSettingsError("Could not choose a music folder."); }
+            catch (error) { setSettingsError(isLibraryTooNew(error) ? safeMessage(error) : "Could not choose a music folder."); }
           })()}><FolderOpen /></button>
         </div>
       </section>}

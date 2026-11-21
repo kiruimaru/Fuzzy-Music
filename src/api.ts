@@ -137,6 +137,11 @@ export function backgroundUrl(path: string) {
   return convertFileSrc(path);
 }
 
+export function isLibraryTooNew(error: unknown): boolean {
+  return typeof error === "object" && error !== null && "code" in error &&
+    (error as { code: unknown }).code === "library_too_new";
+}
+
 export function safeMessage(error: unknown): string {
   if (typeof error === "object" && error !== null && "code" in error) {
     const code = (error as { code: unknown }).code;
@@ -147,6 +152,7 @@ export function safeMessage(error: unknown): string {
       case "source_unavailable": return "Source unavailable. Check yt-dlp or try another track.";
       case "playback_failed": return "Playback failed. Check mpv and your audio output, or try another track.";
       case "storage_failed": return "Could not save local data. Check free space and permissions.";
+      case "library_too_new": return "The music library was created by a newer Fuzzy Music version. Update the app or restore an older library backup.";
     }
   }
   return "Operation failed. Please retry.";

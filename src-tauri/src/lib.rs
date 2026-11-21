@@ -20,12 +20,35 @@ use std::{
 };
 use tauri::Manager;
 
-struct LibraryState(Option<Arc<library::LibraryService>>);
+struct LibraryState {
+    service: Option<Arc<library::LibraryService>>,
+    /// Why the database could not be opened, kept so every library command
+    /// repeats the actionable reason instead of a generic storage failure.
+    open_error: Option<AppError>,
+}
 
 impl LibraryState {
     fn get(&self) -> Result<Arc<library::LibraryService>, AppError> {
-        self.0.clone().ok_or_else(library::storage_error)
+        self.service.clone().ok_or_else(|| {
+            self.open_error
+                .clone()
+                .unwrap_or_else(library::storage_error)
+        })
     }
+}
+
+/// Application data directory. Debug builds work in a `dev` subdirectory so a
+/// development schema upgrade can never make the installed release unable to
+/// open its database.
+fn app_data_root(app: &tauri::AppHandle) -> Result<PathBuf, tauri::Error> {
+    Ok(data_root(
+        app.path().app_data_dir()?,
+        cfg!(debug_assertions),
+    ))
+}
+
+pub(crate) fn data_root(base: PathBuf, development: bool) -> PathBuf {
+    if development { base.join("dev") } else { base }
 }
 
 /// Nearest neighbours whose audio startup segments are kept in RAM; links only
@@ -749,9 +772,7 @@ async fn choose_background_image(app: tauri::AppHandle) -> Result<Option<String>
             return Ok(None);
         };
         let source = picked.into_path().map_err(|_| library::storage_error())?;
-        let directory = app
-            .path()
-            .app_data_dir()
+        let directory = app_data_root(&app)
             .map_err(|_| library::storage_error())?
             .join("background");
         std::fs::create_dir_all(&directory).map_err(|_| library::storage_error())?;
@@ -782,9 +803,7 @@ async fn choose_background_image(app: tauri::AppHandle) -> Result<Option<String>
 #[tauri::command]
 async fn clear_background_image(app: tauri::AppHandle) -> Result<(), AppError> {
     worker(move || {
-        let directory = app
-            .path()
-            .app_data_dir()
+        let directory = app_data_root(&app)
             .map_err(|_| library::storage_error())?
             .join("background");
         if directory.is_dir() {
@@ -1253,26 +1272,32 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .manage(Arc::new(Shell::new()))
         .setup(|app| {
-            let data = app.path().app_data_dir()?;
+            let data = app_data_root(app.handle())?;
             let music = app
                 .path()
                 .audio_dir()
                 .unwrap_or_else(|_| data.clone())
                 .join("Fuzzy Music");
-            let service = library::Library::open(&data, &music).ok().map(|library| {
-                let service = library::LibraryService::start(
-                    library,
-                    dependencies::executable("FUZZY_YTDLP", "yt-dlp"),
-                    fuzzy_application::NetworkPolicy::detect(),
-                );
-                let startup = Arc::clone(&service);
-                std::thread::spawn(move || {
-                    let _ = startup.library.scan();
-                    let _ = startup.resume();
-                });
-                service
+            let (service, open_error) = match library::Library::open(&data, &music) {
+                Ok(library) => {
+                    let service = library::LibraryService::start(
+                        library,
+                        dependencies::executable("FUZZY_YTDLP", "yt-dlp"),
+                        fuzzy_application::NetworkPolicy::detect(),
+                    );
+                    let startup = Arc::clone(&service);
+                    std::thread::spawn(move || {
+                        let _ = startup.library.scan();
+                        let _ = startup.resume();
+                    });
+                    (Some(service), None)
+                }
+                Err(error) => (None, Some(error)),
+            };
+            app.manage(LibraryState {
+                service,
+                open_error,
             });
-            app.manage(LibraryState(service));
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -1312,7 +1337,7 @@ pub fn run() {
             if matches!(event, tauri::WindowEvent::CloseRequested { .. }) {
                 // Prevent teardown until owned children have been killed and reaped.
                 let shell = window.state::<Arc<Shell>>().inner().clone();
-                let library = window.state::<LibraryState>().0.clone();
+                let library = window.state::<LibraryState>().service.clone();
                 if let tauri::WindowEvent::CloseRequested { api, .. } = event {
                     api.prevent_close();
                 }
@@ -1331,7 +1356,7 @@ pub fn run() {
         .run(|app, event| {
             if matches!(event, tauri::RunEvent::Exit) {
                 app.state::<Arc<Shell>>().shutdown();
-                if let Some(library) = &app.state::<LibraryState>().0 {
+                if let Some(library) = &app.state::<LibraryState>().service {
                     library.shutdown();
                 }
             }
@@ -1345,6 +1370,16 @@ mod tests {
         process::Command,
         time::{Duration, Instant},
     };
+
+    #[test]
+    fn debug_builds_keep_their_data_out_of_the_release_library() {
+        let base = PathBuf::from("fuzzy-data");
+        assert_eq!(data_root(base.clone(), false), base);
+        assert_eq!(
+            data_root(base, true),
+            PathBuf::from("fuzzy-data").join("dev")
+        );
+    }
 
     struct Fixture(PathBuf);
     impl Fixture {

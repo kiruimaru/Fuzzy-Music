@@ -210,6 +210,31 @@ impl SoundCloudClient {
         web::artist(options, artist_url, self.network.as_ref())
     }
 
+    pub fn related_tracks(&self, track_id: &str) -> Result<Vec<Track>, SoundCloudError> {
+        self.related_tracks_with_options(track_id, 25, &RequestOptions::default())
+    }
+
+    pub fn related_tracks_with_options(
+        &self,
+        track_id: &str,
+        limit: usize,
+        options: &RequestOptions,
+    ) -> Result<Vec<Track>, SoundCloudError> {
+        let id = track_id
+            .parse::<i64>()
+            .ok()
+            .filter(|id| *id > 0)
+            .ok_or_else(|| {
+                SoundCloudError::InvalidInput("Expected a SoundCloud track id".into())
+            })?;
+        if !(1..=50).contains(&limit) {
+            return Err(SoundCloudError::InvalidInput(
+                "Related track limit must be between 1 and 50".into(),
+            ));
+        }
+        web::related(options, &id.to_string(), limit, self.network.as_ref())
+    }
+
     pub fn resolve_with_options(
         &self,
         track_url: &str,
@@ -452,5 +477,27 @@ mod tests {
         assert!(is_artist_url("https://soundcloud.com/artist"));
         assert!(is_artist_url("https://soundcloud.com/artist/"));
         assert!(is_artist_url("https://www.soundcloud.com/artist"));
+    }
+
+    #[test]
+    fn related_track_ids_are_validated_before_network_access() {
+        let client = SoundCloudClient::new("does-not-exist");
+        for id in ["", "0", "-2", "abc", " 12", "12/../../users/1"] {
+            assert!(
+                matches!(
+                    client.related_tracks(id),
+                    Err(SoundCloudError::InvalidInput(_))
+                ),
+                "{id} must be rejected"
+            );
+        }
+        assert!(matches!(
+            client.related_tracks_with_options("12", 0, &RequestOptions::default()),
+            Err(SoundCloudError::InvalidInput(_))
+        ));
+        assert!(matches!(
+            client.related_tracks_with_options("12", 51, &RequestOptions::default()),
+            Err(SoundCloudError::InvalidInput(_))
+        ));
     }
 }

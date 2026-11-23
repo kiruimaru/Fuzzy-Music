@@ -123,6 +123,11 @@ export const api = {
       generation, request: { source: "soundcloud", artistUrl },
     }),
   cancelArtists: (generation: number) => invoke<void>("cancel_artists", { generation }),
+  relatedTracks: (generation: number, track: Track) =>
+    invoke<{ tracks: Track[] }>("related_tracks", {
+      generation, request: { source: track.source, trackId: track.id },
+    }),
+  cancelRelated: (generation: number) => invoke<void>("cancel_related", { generation }),
   pause: (generation: number, paused: boolean) => invoke<void>("update_playback", { generation, action: { type: "pause", paused } }),
   seek: (generation: number, positionMs: number) => invoke<void>("update_playback", { generation, action: { type: "seek", position_ms: positionMs } }),
   volume: (generation: number, volume: number) => invoke<void>("update_playback", { generation, action: { type: "volume", volume } }),

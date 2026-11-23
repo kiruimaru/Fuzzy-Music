@@ -348,7 +348,7 @@ fn track_collection(value: serde_json::Value) -> Result<Vec<TrackJson>, SoundClo
     serde_json::from_value::<Response>(value)
         .map(|response| response.collection)
         .map_err(|_| {
-            SoundCloudError::InvalidResponse("SoundCloud returned unexpected artist tracks".into())
+            SoundCloudError::InvalidResponse("SoundCloud returned unexpected tracks".into())
         })
 }
 
@@ -558,6 +558,31 @@ pub(crate) fn artist(
         albums,
         playlists,
     })
+}
+
+/// A bounded page of tracks SoundCloud recommends next to a seed track.
+pub(crate) fn related(
+    options: &RequestOptions,
+    track_id: &str,
+    limit: usize,
+    network: Option<&crate::network::NetworkPolicy>,
+) -> Result<Vec<Track>, SoundCloudError> {
+    check_cancelled(options)?;
+    let http = Http::new(options, network)?;
+    let path = format!("/tracks/{track_id}/related?limit={limit}");
+    let value = match api_json(&http, &path, options, false) {
+        Ok(value) => value,
+        Err(SoundCloudError::Network(status)) if status.starts_with("HTTP status 40") => {
+            forget_client_id();
+            api_json(&http, &path, options, true)?
+        }
+        Err(error) => return Err(error),
+    };
+    Ok(track_collection(value)?
+        .into_iter()
+        .filter_map(track_from_json)
+        .take(limit)
+        .collect())
 }
 
 pub(crate) fn search_tracks(

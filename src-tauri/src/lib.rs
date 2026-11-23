@@ -5,8 +5,9 @@ mod playback;
 
 use fuzzy_application::{
     AppError, Application, ArtistTracksRequest, ArtistTracksResponse, CancellationToken, ErrorCode,
-    PlaylistTracksRequest, PlaylistTracksResponse, RequestOptions, ResolveTrackRequest,
-    SearchPlaylistsRequest, SearchPlaylistsResponse, SearchTracksRequest, SearchTracksResponse,
+    PlaylistTracksRequest, PlaylistTracksResponse, RelatedTracksRequest, RelatedTracksResponse,
+    RequestOptions, ResolveTrackRequest, SearchPlaylistsRequest, SearchPlaylistsResponse,
+    SearchTracksRequest, SearchTracksResponse,
 };
 use fuzzy_soundcloud::SoundCloudClient;
 use serde::Serialize;
@@ -110,6 +111,7 @@ struct Control {
     search: Operation,
     playlists: Operation,
     artists: Operation,
+    related: Operation,
     playback: Operation,
     player: Option<playback::Player>,
     status: PlaybackStatus,
@@ -155,6 +157,7 @@ impl Control {
         self.search.cancellation.cancel();
         self.playlists.cancellation.cancel();
         self.artists.cancellation.cancel();
+        self.related.cancellation.cancel();
         self.playback.cancellation.cancel();
         self.preparation.cancellation.cancel();
         self.lookahead.cancellation.cancel();
@@ -290,6 +293,29 @@ impl Shell {
         let result = self.application.artist_tracks(request, &options);
         let control = self.control.lock().map_err(|_| internal())?;
         if !control.artists.current(generation) || control.closed {
+            return Err(cancelled());
+        }
+        result
+    }
+
+    fn related_tracks(
+        &self,
+        generation: u64,
+        request: RelatedTracksRequest,
+    ) -> Result<RelatedTracksResponse, AppError> {
+        let options = {
+            let mut control = self.control.lock().map_err(|_| internal())?;
+            if control.closed {
+                return Err(cancelled());
+            }
+            let options = control.related.begin(generation)?;
+            control.active += 1;
+            options
+        };
+        let _active = Active(self);
+        let result = self.application.related_tracks(request, &options);
+        let control = self.control.lock().map_err(|_| internal())?;
+        if !control.related.current(generation) || control.closed {
             return Err(cancelled());
         }
         result
@@ -1100,6 +1126,31 @@ async fn cancel_artists(
 }
 
 #[tauri::command]
+async fn related_tracks(
+    shell: tauri::State<'_, Arc<Shell>>,
+    generation: u64,
+    request: RelatedTracksRequest,
+) -> Result<RelatedTracksResponse, AppError> {
+    let shell = shell.inner().clone();
+    worker(move || shell.related_tracks(generation, request)).await
+}
+
+#[tauri::command]
+async fn cancel_related(
+    shell: tauri::State<'_, Arc<Shell>>,
+    generation: u64,
+) -> Result<(), AppError> {
+    let shell = shell.inner().clone();
+    worker(move || {
+        let mut control = shell.control.lock().map_err(|_| internal())?;
+        control.related.begin(generation)?;
+        control.related.cancellation.cancel();
+        Ok(())
+    })
+    .await
+}
+
+#[tauri::command]
 async fn play_track(
     shell: tauri::State<'_, Arc<Shell>>,
     generation: u64,
@@ -1247,6 +1298,8 @@ pub fn run() {
             cancel_playlists,
             artist_tracks,
             cancel_artists,
+            related_tracks,
+            cancel_related,
             play_track,
             stop_playback,
             playback_status,

@@ -144,7 +144,7 @@ test("errors never echo arbitrary IPC diagnostics", () => {
 
 const playlist: Playlist = {
   id: "9", title: "Chill mix", author: "Lofi Girl", artworkUrl: null,
-  trackCount: 2, durationMs: null, source: "soundcloud",
+  trackCount: 2, durationMs: null, isAlbum: false, source: "soundcloud",
   sourceUrl: "https://soundcloud.com/lofi_girl/sets/chill",
 };
 
@@ -680,7 +680,7 @@ test("favourite can be deleted from the library with its downloaded file", async
 test("playlists are bookmarked and downloaded on request", async () => {
   const playlist: Playlist = {
     id: "77", title: "Evening Mix", author: "Curator", artworkUrl: null,
-    trackCount: 2, durationMs: null, source: "soundcloud",
+    trackCount: 2, durationMs: null, isAlbum: false, source: "soundcloud",
     sourceUrl: "https://soundcloud.com/curator/sets/evening-mix",
   };
   const saved = { id: 3, playlist, favourite: true, downloaded: 0, total: 0, state: "idle" as const };
@@ -709,7 +709,7 @@ test("playlists are bookmarked and downloaded on request", async () => {
 test("playlist download can be cancelled and its tracks stay out of favourites", async () => {
   const playlist: Playlist = {
     id: "78", title: "Morning Mix", author: "Curator", artworkUrl: null,
-    trackCount: 3, durationMs: null, source: "soundcloud",
+    trackCount: 3, durationMs: null, isAlbum: false, source: "soundcloud",
     sourceUrl: "https://soundcloud.com/curator/sets/morning-mix",
   };
   const downloading = { id: 4, playlist, favourite: true, downloaded: 1, total: 3, state: "downloading" as const };
@@ -788,10 +788,11 @@ test("artist pages open from a track and play their list in order", async () => 
 test("artist page separates tracks, albums and playlists", async () => {
   const album: Playlist = {
     id: "91", title: "Night LP", author: "Artist", artworkUrl: null, trackCount: 8,
-    durationMs: null, source: "soundcloud", sourceUrl: "https://soundcloud.com/artist/sets/night-lp",
+    durationMs: 2_400_000, isAlbum: true, source: "soundcloud",
+    sourceUrl: "https://soundcloud.com/artist/sets/night-lp",
   };
   const mix: Playlist = {
-    ...album, id: "92", title: "Radio Mix", trackCount: 12,
+    ...album, id: "92", title: "Radio Mix", trackCount: 12, isAlbum: false,
     sourceUrl: "https://soundcloud.com/artist/sets/radio-mix",
   };
   const artist = { id: "5", name: "Artist", avatarUrl: null, trackCount: 3, sourceUrl: "https://soundcloud.com/artist" };
@@ -812,6 +813,9 @@ test("artist page separates tracks, albums and playlists", async () => {
   fireEvent.click(within(albums).getByRole("button", { name: "Open playlist Night LP" }));
   await waitFor(() => expect(api.playlistTracks).toHaveBeenCalledWith(expect.any(Number), album));
   await screen.findByRole("heading", { name: "Night LP" });
+  const albumPage = await screen.findByRole("region", { name: "Album" });
+  expect(within(albumPage).getByRole("button", { name: "Play album" })).toBeTruthy();
+  expect(within(albumPage).getByText(/40:00/)).toBeTruthy();
   // Tracks opened from an artist page must stay visible while the artist is
   // still the return target; only the artist sections are hidden.
   const albumTracks = await screen.findByRole("region", { name: "Search results" });
@@ -829,7 +833,7 @@ test("artist page separates tracks, albums and playlists", async () => {
 test("playlist authors link to their artist page", async () => {
   const playlist: Playlist = {
     id: "81", title: "Night Mix", author: "Curator", artworkUrl: null,
-    trackCount: 3, durationMs: null, source: "soundcloud",
+    trackCount: 3, durationMs: null, isAlbum: false, source: "soundcloud",
     sourceUrl: "https://soundcloud.com/curator/sets/night-mix",
   };
   const artist = { id: "9", name: "Curator", avatarUrl: null, trackCount: 12, sourceUrl: "https://soundcloud.com/curator" };

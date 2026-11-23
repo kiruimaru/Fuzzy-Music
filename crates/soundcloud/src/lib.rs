@@ -20,6 +20,7 @@ pub struct Playlist {
     pub artwork_url: Option<String>,
     pub track_count: Option<u32>,
     pub duration_seconds: Option<f64>,
+    pub is_album: bool,
     pub webpage_url: String,
 }
 

@@ -295,6 +295,7 @@ fn playlist_from_json(value: PlaylistJson) -> Option<Playlist> {
             .duration
             .filter(|ms| ms.is_finite() && *ms >= 0.0)
             .map(|ms| ms / 1000.0),
+        is_album: value.is_album,
         webpage_url: playlist_url(value.permalink_url)?,
     })
 }

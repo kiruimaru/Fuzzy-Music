@@ -30,6 +30,7 @@ export type Playlist = {
   artworkUrl: string | null;
   trackCount: number | null;
   durationMs: number | null;
+  isAlbum: boolean;
   source: "soundcloud";
   sourceUrl: string;
 };

@@ -1270,6 +1270,7 @@ mod tests {
             artwork_url: None,
             track_count: Some(2),
             duration_ms: None,
+            is_album: false,
             source: Source::Soundcloud,
             source_url: "https://soundcloud.com/artist/sets/mix-1".into(),
         }

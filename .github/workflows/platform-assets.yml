@@ -7,6 +7,7 @@ on:
       - scripts/release-assets*
       - scripts/*linux*
       - scripts/package-appimage.sh
+      - scripts/setup-linux-runtime.sh
   workflow_dispatch:
     inputs:
       release_tag:
@@ -31,7 +32,7 @@ jobs:
       - run: node --test scripts/release-assets.test.mjs
       - run: bash scripts/test-linux-runtime.sh
       - run: bash scripts/test-linux-apt.sh
-      - run: bash -n scripts/package-appimage.sh scripts/linux-runtime-tool.sh scripts/test-linux-runtime.sh
+      - run: bash -n scripts/package-appimage.sh scripts/linux-runtime-tool.sh scripts/setup-linux-runtime.sh scripts/test-linux-runtime.sh
   windows-exe:
     if: github.event_name == 'workflow_dispatch'
     needs: checks

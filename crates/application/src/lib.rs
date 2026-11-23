@@ -169,7 +169,7 @@ impl From<SoundCloudError> for AppError {
             }
             SoundCloudError::Process(_) => (
                 ErrorCode::SourceUnavailable,
-                "yt-dlp is missing or cannot start. Run setup-windows-runtime.ps1 beside the app on Windows, or repair FUZZY_YTDLP. See README.md.",
+                extractor_dependency_message(),
                 false,
             ),
             SoundCloudError::ExtractorFailed { .. } | SoundCloudError::InvalidResponse(_) => {
@@ -186,6 +186,16 @@ impl From<SoundCloudError> for AppError {
             message: message.into(),
             retryable,
         }
+    }
+}
+
+fn extractor_dependency_message() -> &'static str {
+    if cfg!(target_os = "windows") {
+        "yt-dlp is missing or cannot start. Run setup-windows-runtime.ps1 beside the app, or repair FUZZY_YTDLP. See README.md."
+    } else if cfg!(target_os = "linux") {
+        "yt-dlp is missing or cannot start. For an AppImage, run setup-linux-runtime.sh with its path; otherwise install yt-dlp or set FUZZY_YTDLP. See README.md."
+    } else {
+        "yt-dlp is missing or cannot start. Install yt-dlp or set FUZZY_YTDLP. See README.md."
     }
 }
 
@@ -622,6 +632,18 @@ mod tests {
                 .code,
                 ErrorCode::InvalidInput
             );
+        }
+    }
+
+    #[test]
+    fn missing_extractor_message_matches_platform_setup() {
+        let message = extractor_dependency_message();
+        if cfg!(target_os = "windows") {
+            assert!(message.contains("setup-windows-runtime.ps1"));
+        } else if cfg!(target_os = "linux") {
+            assert!(message.contains("setup-linux-runtime.sh"));
+        } else {
+            assert!(message.contains("install yt-dlp"));
         }
     }
 }

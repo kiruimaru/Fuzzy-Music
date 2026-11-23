@@ -1,5 +1,117 @@
 # AI Work Log
 
+## 2026-11-23 | Agent: Codex | Task: release-0.2.0
+
+### Goal
+
+Integrate every open PR and publish an easy Linux download with in-app
+dependency acquisition, as requested by the owner.
+
+### Changed
+
+Merged #32-#35 into main with individual merge commits and fast-forwarded their
+stacked bases; GitHub now reports no open PRs. Added typed runtime status/setup
+IPC, explicit frontend install and system-package consent controls, pinned
+yt-dlp/notices downloads with integrity checks and atomic user-data publication,
+and bounded pkexec package-manager invocation. Added 0.2.0 versioning, release
+notes, architecture decision 0020 and automatic new-tag AppImage publication.
+The existing sidecar remains available; 0.1.0 tags/assets are untouched.
+
+### Checks
+
+Frontend 45 tests, ten browser fixtures with inspected 320px/1000px setup
+screenshots, 68 offline Rust tests, strict Clippy/rustfmt, native debug build,
+eight release Node tests, wrapper/context smoke, Bash syntax and actionlint
+passed. The opt-in live yt-dlp download, all three pinned hashes and executable
+version passed. Normal tests now ignore five opt-in/fixture cases.
+
+### Next action
+
+Integrate the release commit, push v0.2.0, monitor Windows/Linux Actions,
+then independently verify published downloads. Privileged clean-machine setup,
+human listening and broad Linux compatibility remain manual acceptance items.
+
+## 2026-11-23 | Agent: Codex | Task: local build and launch follow-up
+
+### Goal
+
+Finish the current working-tree build and launch after the owner installs
+the missing system dependencies.
+
+### Changed
+
+No implementation changes. Updated project and task context to clear the
+system-dependency blocker and record native startup.
+
+### Checks
+
+WebKitGTK/JavaScriptCoreGTK 4.1 are available through pkg-config; mpv and
+yt-dlp are on PATH. `npm run tauri -- build --debug --no-bundle` passed.
+`cargo test --workspace --all-targets --locked`: 66 passed, four ignored.
+Launched the new debug binary in `fuzzy-music-local.service` with the documented
+WebKit workaround; service is active and Hyprland reports its window mapped
+and not hidden. Live search and audible playback were not exercised.
+
+### Next action
+
+Manual search/playback acceptance and next-version AppImage build remain.
+
+## 2026-11-23 | Agent: Codex | Task: local build and launch
+
+### Goal
+
+Build and launch the current working-tree version without replacing it with
+the older published AppImage.
+
+### Changed
+
+No implementation changes. Updated the Linux runtime task with the build blocker.
+
+### Checks
+
+`npm test`: 42 passed. `npm run tauri -- build --debug --no-bundle`:
+TypeScript/Vite passed; Rust failed on missing `javascriptcoregtk-4.1.pc`
+and `webkit2gtk-4.1.pc`. `sudo -n true` requires a password.
+Neither mpv nor yt-dlp is on PATH. No new application binary was launched.
+
+### Next action
+
+The owner needs to run `sudo pacman -S --needed webkit2gtk-4.1 mpv yt-dlp`,
+then retry the native build and launch with the documented WebKit workaround.
+
+## 2026-11-23 | Agent: Codex | Task: linux-runtime-bootstrap
+
+### Goal
+
+Prepare the next Linux AppImage build to acquire runtime tools alongside the
+application, while preserving the existing v0.1.0 assets and licensing policy.
+
+### Changed
+
+Added a sidecar setup script that SHA256-verifies upstream yt-dlp and retains
+its license notices, installs mpv with the host package manager, and optionally
+installs ffmpeg. The AppImage wrapper prefers sibling tools; dependency errors
+now give platform-specific guidance. Workflow packaging and checksum coverage
+include the setup script. Decision 0019 and the task handoff record limitations.
+
+### Checks
+
+Frontend tests passed (42 on the PR stack) and Vite build passed. The published
+AppImage SHA256 matched its release sidecar and its native window is running in
+`fuzzy-music-user.service`.
+
+Linux wrapper/APT/context checks passed; release Node tests passed (8);
+application and source Rust tests passed (28, one ignored), strict Clippy and
+rustfmt passed. The setup downloaded the pinned Linux yt-dlp and verified both
+upstream notice hashes while using a mock mpv. Full workspace testing stops at
+missing `javascriptcoregtk-4.1.pc`; system packages cannot be installed here.
+
+### Next action
+
+Finish native Tauri/AppImage verification on a host with WebKitGTK development
+packages, then use the Linux Actions build for the next-version AppImage after
+PR review and CI. Do not replace v0.1.0 assets.
+
 ## 2026-11-20 | Agent: Codex | Task: platform-release-assets
 
 ### Goal

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 import { api, backgroundUrl, isLibraryTooNew, safeMessage, type ArtistTracks, type LibraryEntry, type Playlist, type PlaylistEntry, type Track } from "./api";
 import { Download, FolderOpen, Heart, ListMusic, ListPlus, Radio, RefreshCw, RotateCcw, SkipBack, SkipForward, Trash2, Volume2, X } from "lucide-react";
 import { settingsStore, validVolume, type AppSettings, type SettingsStore } from "./settings";
+import { RuntimeSetup } from "./RuntimeSetup";
 import blackMascot from "./assets/black.png";
 import soundcloudIcon from "./assets/soundcloud.png";
 import youtubeIcon from "./assets/youtube.png";
@@ -1014,6 +1015,7 @@ export function App({ settings = settingsStore }: { settings?: SettingsStore }) 
       </p>}
 
       {libraryError && <p className="library-error" role="alert">{libraryError}</p>}
+      <RuntimeSetup settings={view === "settings"} />
       {view === "settings" && <section className="settings-view" aria-label="Settings">
         <h2>Settings</h2>
         <label htmlFor="download-quality">Download quality</label>

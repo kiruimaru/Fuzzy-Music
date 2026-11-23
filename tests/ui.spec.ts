@@ -1,5 +1,36 @@
 import { expect, test } from "@playwright/test";
 
+for (const width of [1000, 320]) {
+  test(`Linux runtime setup and consent at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 720 });
+    await page.addInitScript(() => {
+      const runtime = { supported: true, ytDlp: false, mpv: false, ffmpeg: false, canInstallPackages: true };
+      Object.assign(window, { __TAURI_INTERNALS__: {
+        invoke: async (command: string, args?: { installSystem?: boolean; ffmpeg?: boolean }) => {
+          if (command === "runtime_status") return runtime;
+          if (command === "install_runtime") {
+            if (!args?.installSystem || !args.ffmpeg) throw new Error("Consent missing");
+            return { ...runtime, ytDlp: true, mpv: true, ffmpeg: true };
+          }
+          if (command === "library_entries" || command === "playlist_entries") return [];
+          if (command === "get_settings") return { volume: 100, theme: "dark" };
+          if (command === "playback_status") return { generation: 0, state: "idle", volume: 100 };
+        },
+      } });
+    });
+    await page.goto("/");
+    const setup = page.getByRole("region", { name: "Runtime setup" });
+    await expect(setup).toBeVisible();
+    await expect(setup.getByRole("checkbox", { name: "Install system packages" })).not.toBeChecked();
+    await setup.getByRole("checkbox", { name: "Install system packages" }).check();
+    await setup.getByLabel("Include ffmpeg").check();
+    await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    await page.screenshot({ path: `test-results/runtime-${width}.png`, fullPage: true });
+    await setup.getByRole("button", { name: "Install dependencies" }).click();
+    await expect(setup).toHaveCount(0);
+  });
+}
+
 for (const viewport of [{ width: 1000, height: 720 }, { width: 320, height: 640 }]) {
   test(`search, Play and Stop at ${viewport.width}px with fixture IPC`, async ({ page }) => {
     await page.setViewportSize(viewport);

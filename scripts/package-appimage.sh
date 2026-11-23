@@ -17,6 +17,7 @@ install -m755 "$packaging/scripts/linux-runtime-tool.sh" "$stage/mpv"
 install -m755 "$packaging/scripts/linux-runtime-tool.sh" "$stage/yt-dlp"
 cp "$app/LICENSE" "$stage/LICENSE"
 cp "$packaging/docs/linux-appimage.md" "$stage/README.md"
+cp "$packaging/scripts/setup-linux-runtime.sh" "$stage/setup-linux-runtime.sh"
 mkdir "$stage/npm-licenses"
 while IFS= read -r -d '' file; do
   relative=${file#"$app/node_modules/"}
@@ -32,6 +33,7 @@ writeFileSync(`${stage}/appimage.json`, JSON.stringify({ bundle: { active: true,
   '/usr/bin/tools/yt-dlp': `${stage}/yt-dlp`,
   '/usr/share/doc/fuzzy-music/LICENSE': `${stage}/LICENSE`,
   '/usr/share/doc/fuzzy-music/README.md': `${stage}/README.md`,
+  '/usr/share/doc/fuzzy-music/setup-linux-runtime.sh': `${stage}/setup-linux-runtime.sh`,
   '/usr/share/doc/fuzzy-music/npm-licenses': `${stage}/npm-licenses`
 } } } } }));
 NODE
@@ -58,8 +60,14 @@ for section in .text .rodata; do
     cmp "$stage/original$section" "$stage/packaged$section"
   fi
 done
-./squashfs-root/usr/bin/tools/mpv --version
-./squashfs-root/usr/bin/tools/yt-dlp --version
+# Runtime tools are intentionally absent from the payload. Missing host tools
+# are handled by the application's first-run setup rather than a build failure.
+for tool in mpv yt-dlp; do
+  if command -v "$tool" >/dev/null 2>&1; then
+    "./squashfs-root/usr/bin/tools/$tool" --version
+  fi
+done
+install -m755 "$packaging/scripts/setup-linux-runtime.sh" "$output/setup-linux-runtime.sh"
 
 # Preserve exact Ubuntu source-package coordinates and retrieval instructions
 # for bundled system libraries, rather than claiming they are application code.

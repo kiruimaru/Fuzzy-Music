@@ -8,6 +8,8 @@ import { createMemorySettingsStore, type SettingsStore } from "./settings";
 vi.mock("./api", async (original) => ({
   ...await original<typeof import("./api")>(),
   api: {
+    runtimeStatus: vi.fn().mockResolvedValue({ supported: false }),
+    installRuntime: vi.fn(),
     search: vi.fn(), cancelSearch: vi.fn().mockResolvedValue(undefined),
     play: vi.fn(), stop: vi.fn().mockResolvedValue(undefined),
     status: vi.fn().mockResolvedValue({ generation: 0, state: "idle" }),
@@ -66,6 +68,9 @@ function search(query: string) {
 afterEach(() => { cleanup(); vi.clearAllMocks(); });
 beforeEach(() => {
   vi.resetAllMocks();
+  vi.mocked(api.runtimeStatus).mockResolvedValue({
+    supported: false, ytDlp: true, mpv: true, ffmpeg: true, canInstallPackages: false,
+  });
   for (const method of [api.cancelSearch, api.stop, api.prepare, api.prefetch,
     api.cancelPreparation, api.cancelPlaylists, api.cancelArtists, api.cancelRelated, api.pause, api.seek, api.volume]) {
     vi.mocked(method).mockResolvedValue(undefined);

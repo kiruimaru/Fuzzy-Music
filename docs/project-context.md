@@ -1,7 +1,7 @@
 # Fuzzy Music Project Context
 
-**Last reviewed:** 2026-11-20
-**Status:** release 0.1.0 published for Windows x64 portable/EXE and Linux x86_64 AppImage; platform acceptance and lifecycle follow-ups remain
+**Last reviewed:** 2026-11-23
+**Status:** PRs #32-#35 merged; 0.2.0 release and in-app Linux runtime setup are being prepared; published 0.1.0 assets remain unchanged
 
 ## Product
 
@@ -62,6 +62,23 @@ response formats inside the source adapter.
   script, adjacent generated `tools` and WebView2; Linux needs host `mpv` and
   current `yt-dlp`. Neither binary is signed or an installer. See
   `../tasks/platform-release-assets.md` and `linux-appimage.md`.
+- Linux runtime setup for a future AppImage now has a pinned yt-dlp download,
+  adjacent license notices and host package-manager installation for mpv with
+  optional ffmpeg. The updated wrapper prefers adjacent yt-dlp. This work is
+  on `feat/linux-runtime-bootstrap` above PR #35; v0.1.0 remains unchanged.
+  See `../tasks/linux-runtime-bootstrap.md` and decision 0019. The current local
+  host now has the required WebKitGTK development packages, mpv and yt-dlp
+  installed by the owner. The current working tree's standalone debug build
+  and native window launch passed, along with 66 Rust tests (four ignored).
+  The new binary runs in `fuzzy-music-local.service`; live playback and the
+  next-version AppImage remain unverified.
+- The owner authorized integration of all open PRs. #32-#35 are merged into
+  main at `7eb3545`, with their stacked base branches fast-forwarded so GitHub
+  records all four as merged; the open-PR query is empty.
+- Release 0.2.0 adds explicit Linux runtime setup inside the app, using a
+  verified user-data yt-dlp download and consent-gated pkexec for host mpv and
+  optional ffmpeg. It adds automatic AppImage builds/publication for new tags.
+  See decision 0020 and `../tasks/release-0.2.0.md`; publication is pending.
 - PRs #24–#27 were already merged when this session started. The remaining
   PR #28 was validated and merged as `224ecbd`; no open PRs remained at the
   final integration check. Main now includes the local library/settings,

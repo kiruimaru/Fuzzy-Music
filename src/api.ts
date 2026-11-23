@@ -74,7 +74,18 @@ export type PlaylistEntry = {
   state: "idle" | "downloading" | "ready" | "error";
 };
 
+export type RuntimeStatus = {
+  supported: boolean;
+  ytDlp: boolean;
+  mpv: boolean;
+  ffmpeg: boolean;
+  canInstallPackages: boolean;
+};
+
 export const api = {
+  runtimeStatus: () => invoke<RuntimeStatus>("runtime_status"),
+  installRuntime: (installSystem: boolean, ffmpeg: boolean) =>
+    invoke<RuntimeStatus>("install_runtime", { installSystem, ffmpeg }),
   library: () => invoke<LibraryEntry[]>("library_entries"),
   scanLibrary: () => invoke<{ imported: number; skipped: number; truncated: boolean }>("scan_library"),
   favourite: (track: Track, liked: boolean) => invoke<void>("set_favourite", { track, liked }),

@@ -2,6 +2,7 @@ mod audio_cache;
 mod dependencies;
 mod library;
 mod playback;
+mod runtime_setup;
 
 use fuzzy_application::{
     AppError, Application, ArtistTracksRequest, ArtistTracksResponse, CancellationToken, ErrorCode,
@@ -1267,6 +1268,19 @@ async fn update_playback(
     worker(move || shell.update_playback(generation, action)).await
 }
 
+#[tauri::command]
+async fn runtime_status() -> Result<runtime_setup::RuntimeStatus, AppError> {
+    worker(|| Ok(runtime_setup::status())).await
+}
+
+#[tauri::command]
+async fn install_runtime(
+    install_system: bool,
+    ffmpeg: bool,
+) -> Result<runtime_setup::RuntimeStatus, AppError> {
+    worker(move || runtime_setup::install(install_system, ffmpeg)).await
+}
+
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
@@ -1301,6 +1315,8 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            runtime_status,
+            install_runtime,
             get_settings,
             update_settings,
             library_entries,
@@ -1335,6 +1351,7 @@ pub fn run() {
         ])
         .on_window_event(|window, event| {
             if matches!(event, tauri::WindowEvent::CloseRequested { .. }) {
+                runtime_setup::cancel();
                 // Prevent teardown until owned children have been killed and reaped.
                 let shell = window.state::<Arc<Shell>>().inner().clone();
                 let library = window.state::<LibraryState>().service.clone();

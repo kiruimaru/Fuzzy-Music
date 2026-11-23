@@ -18,7 +18,11 @@ mpv and optional ffmpeg remain distribution packages rather than bundled
 binaries. A separate unchecked consent checkbox authorizes pkexec to invoke
 the detected host package manager with fixed arguments. No passwords are read
 by the app, and no arbitrary commands or arguments come from the frontend.
-The desktop must provide a polkit authentication agent. A missing agent,
+The desktop must provide a polkit authentication agent. A root-owned host
+timeout bounds installation even when the user cannot signal an elevated child.
+Cancellation/close makes a best-effort stop without synchronously waiting for
+root; an already-authorized package transaction may finish in the background.
+A missing agent,
 declined request, stale package indexes or interrupted install is reported for
 retry or manual package-manager repair. Package-manager interruption, including
 window close or the ten-minute timeout, may require distribution-specific
@@ -26,6 +30,6 @@ transaction recovery; the application does not attempt privileged repairs.
 
 No silent download or privilege elevation occurs. Existing runtime overrides
 and manual installation remain supported. The UI stays usable on failure.
-Version 0.2.0 gets its own immutable tag and GitHub Actions AppImage build;
+Version 0.2.1 gets its own immutable tag and GitHub Actions AppImage build;
 the old 0.1.0 assets are untouched. Linux publication waits for the matching
 Windows/corresponding-source release.

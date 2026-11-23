@@ -131,8 +131,13 @@ fn install_packages(ffmpeg: bool) -> Result<(), AppError> {
         .ok_or_else(|| failure("Package manager is unavailable."))?;
     let pkexec = dependencies::find_on_path("pkexec")
         .ok_or_else(|| failure("Administrator approval is unavailable. Install mpv with your distribution's package manager."))?;
+    let timeout = dependencies::find_on_path("timeout").ok_or_else(|| {
+        failure("The system timeout utility is unavailable. Install packages manually.")
+    })?;
     let mut command = Command::new(pkexec);
     command
+        .arg(timeout)
+        .args(["--signal=TERM", "--kill-after=10s", "600s"])
         .arg(executable)
         .args(package_arguments(manager, mpv, ffmpeg))
         .stdin(Stdio::null())
@@ -154,19 +159,27 @@ fn install_packages(ffmpeg: bool) -> Result<(), AppError> {
                 ));
             }
             Err(_) => {
-                let _ = child.kill();
-                let _ = child.wait();
+                reap_install(child);
                 return Err(failure("Could not check package installation."));
             }
             Ok(None) => {}
         }
         if CANCELLED.load(Ordering::SeqCst) || Instant::now() >= deadline {
-            let _ = child.kill();
-            let _ = child.wait();
+            reap_install(child);
             return Err(failure("Runtime setup was cancelled or timed out."));
         }
         std::thread::sleep(Duration::from_millis(100));
     }
+}
+
+#[cfg(target_os = "linux")]
+fn reap_install(mut child: command_group::GroupChild) {
+    // A user process cannot always signal the elevated child. The root-owned
+    // timeout still bounds it; reaping must not block the UI worker or shutdown.
+    let _ = child.kill();
+    std::thread::spawn(move || {
+        let _ = child.wait();
+    });
 }
 
 #[cfg(target_os = "linux")]

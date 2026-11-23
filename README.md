@@ -8,15 +8,15 @@ The repository includes a Rust SoundCloud adapter, a typed application API,
 and a Tauri 2 + React/TypeScript shell for search and mpv playback.
 See [desktop setup and verification](docs/shell-development.md).
 
-## Release 0.2.0
+## Release 0.2.1
 
-For Linux x86_64, download `Fuzzy-Music-0.2.0-linux-x86_64.AppImage`, make it
+For Linux x86_64, download `Fuzzy-Music-0.2.1-linux-x86_64.AppImage`, make it
 executable and open it. The app offers a verified yt-dlp download on first
 launch; missing mpv and optional ffmpeg can be installed after selecting the
 system-package consent checkbox and approving the desktop administrator prompt.
-See [0.2.0 release notes](docs/releases/v0.2.0.md) and
+See [0.2.1 release notes](docs/releases/v0.2.1.md) and
 [Linux setup](docs/linux-appimage.md). Windows users should use the portable
-0.2.0 ZIP and its included setup script. The source archives are not application
+0.2.1 ZIP and its included setup script. The source archives are not application
 downloads. Neither platform binary is signed.
 
 ### Previous Release 0.1.0

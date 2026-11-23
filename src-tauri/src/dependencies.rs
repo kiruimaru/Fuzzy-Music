@@ -57,17 +57,16 @@ pub fn find_on_path(name: &str) -> Option<PathBuf> {
 }
 
 pub fn is_executable(path: &Path) -> bool {
-    if !path.is_file() {
-        return false;
-    }
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
-        path.metadata()
-            .is_ok_and(|metadata| metadata.permissions().mode() & 0o111 != 0)
+        path.is_file()
+            && path
+                .metadata()
+                .is_ok_and(|metadata| metadata.permissions().mode() & 0o111 != 0)
     }
     #[cfg(not(unix))]
-    true
+    path.is_file()
 }
 
 #[cfg(target_os = "linux")]

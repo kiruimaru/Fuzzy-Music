@@ -1,7 +1,7 @@
 # Fuzzy Music Project Context
 
 **Last reviewed:** 2026-11-23
-**Status:** PRs #32-#35 merged; 0.2.0 release and in-app Linux runtime setup are being prepared; published 0.1.0 assets remain unchanged
+**Status:** PRs #32-#35 merged; corrective 0.2.1 release is being prepared after unpublished 0.2.0 Windows lint failure; published 0.1.0 assets remain unchanged
 
 ## Product
 
@@ -78,7 +78,11 @@ response formats inside the source adapter.
 - Release 0.2.0 adds explicit Linux runtime setup inside the app, using a
   verified user-data yt-dlp download and consent-gated pkexec for host mpv and
   optional ffmpeg. It adds automatic AppImage builds/publication for new tags.
-  See decision 0020 and `../tasks/release-0.2.0.md`; publication is pending.
+  See decision 0020 and `../tasks/release-0.2.0.md`. Tag v0.2.0 remains immutable:
+  Linux run 45193904521 built and smoke-tested the AppImage, but Windows run
+  45193904646 failed strict Clippy before publication. The Windows-specific
+  lint was reproduced and fixed for 0.2.1, alongside a root-owned package
+  timeout and nonblocking best-effort elevated-child cancellation.
 - PRs #24–#27 were already merged when this session started. The remaining
   PR #28 was validated and merged as `224ecbd`; no open PRs remained at the
   final integration check. Main now includes the local library/settings,

@@ -458,7 +458,14 @@ impl Player {
 fn dependency_failure() -> AppError {
     AppError {
         code: ErrorCode::PlaybackFailed,
-        message: "mpv is missing or cannot start. Run setup-windows-runtime.ps1 beside the app on Windows, or repair FUZZY_MPV. See README.md.".into(),
+        message: if cfg!(target_os = "windows") {
+            "mpv is missing or cannot start. Run setup-windows-runtime.ps1 beside the app, or repair FUZZY_MPV. See README.md."
+        } else if cfg!(target_os = "linux") {
+            "mpv is missing or cannot start. For an AppImage, run setup-linux-runtime.sh with its path; otherwise install mpv or set FUZZY_MPV. See README.md."
+        } else {
+            "mpv is missing or cannot start. Install mpv or set FUZZY_MPV. See README.md."
+        }
+        .into(),
         retryable: false,
     }
 }
@@ -563,7 +570,13 @@ mod dependency_tests {
         )
         .err()
         .expect("missing executable must fail");
-        assert!(error.message.contains("setup-windows-runtime.ps1"));
+        if cfg!(target_os = "windows") {
+            assert!(error.message.contains("setup-windows-runtime.ps1"));
+        } else if cfg!(target_os = "linux") {
+            assert!(error.message.contains("setup-linux-runtime.sh"));
+        } else {
+            assert!(error.message.contains("Install mpv"));
+        }
         assert!(!error.message.contains("private-directory"));
         assert!(!error.retryable);
     }

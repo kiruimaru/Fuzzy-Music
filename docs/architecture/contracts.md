@@ -309,7 +309,26 @@ publication. Removing a like cancels pending work but never deletes user files.
 Like and failure persist independently; retry is explicit. Temporary signed
 links are neither persisted nor exposed to the interface. See decision 0010.
 
-## Error shape
+## Linux Runtime Setup
+
+`runtime_status(): Promise<RuntimeStatus>` checks executable availability off
+the UI thread. `install_runtime({installSystem: boolean, ffmpeg: boolean})`
+returns the same status. `RuntimeStatus` contains `supported`, `ytDlp`, `mpv`,
+`ffmpeg`, and `canInstallPackages`, all booleans; it never exposes local paths.
+Only Linux x86_64 supports in-app installation. Missing tools are shown on
+startup and status remains available in Settings.
+
+Installation requires an explicit frontend action. yt-dlp and its notices
+are downloaded from fixed upstream HTTPS URLs, with bounded bytes/deadlines,
+pinned SHA-256 verification and atomic publication into the user data directory.
+System packages require a separate explicit consent checkbox; only fixed
+mpv/ffmpeg package arguments are allowed, through host pkexec and its desktop
+authentication agent. No shell or user-supplied command crosses IPC. Package
+installation has a ten-minute deadline and process-group cleanup; window close
+cancels setup. AppImage child media tools clear bundled library/Python overrides.
+See decision 0020. Windows setup is unchanged.
+
+## Error Shape
 
 Errors crossing the Tauri boundary should be safe to display and useful for
 diagnostics:

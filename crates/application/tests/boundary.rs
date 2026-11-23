@@ -32,7 +32,13 @@ fn missing_and_corrupt_extractor_have_actionable_safe_errors() {
             )
             .unwrap_err();
         assert_eq!(error.code, ErrorCode::SourceUnavailable);
-        assert!(error.message.contains("setup-windows-runtime.ps1"));
+        if cfg!(target_os = "windows") {
+            assert!(error.message.contains("setup-windows-runtime.ps1"));
+        } else if cfg!(target_os = "linux") {
+            assert!(error.message.contains("setup-linux-runtime.sh"));
+        } else {
+            assert!(error.message.contains("install yt-dlp"));
+        }
         assert!(!error.message.contains("fuzzy-api-damaged"));
         assert!(!error.retryable);
     }

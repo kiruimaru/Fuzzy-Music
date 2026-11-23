@@ -587,3 +587,12 @@ input[type="range"]:disabled::-webkit-slider-thumb { cursor: default; }
   .artist-avatar { width: 96px; height: 96px; font-size: 30px; }
   .artist-info h2 { font-size: 24px; }
 }
+.runtime-setup { padding: 16px 0; border-bottom: 1px solid var(--line); }
+.runtime-setup h3 { margin: 0 0 12px; font-size: 16px; }
+.runtime-status { display: flex; flex-wrap: wrap; gap: 24px; margin: 0 0 12px; }
+.runtime-status div { display: flex; gap: 8px; }
+.runtime-status dd { margin: 0; opacity: 0.7; }
+.runtime-option { display: flex; align-items: center; gap: 8px; margin: 10px 0; }
+.runtime-option input { flex: 0 0 auto; }
+.runtime-actions { display: flex; align-items: center; gap: 12px; }
+.runtime-actions .ghost { display: inline-flex; align-items: center; gap: 8px; }

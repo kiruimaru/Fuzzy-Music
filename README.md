@@ -8,7 +8,18 @@ The repository includes a Rust SoundCloud adapter, a typed application API,
 and a Tauri 2 + React/TypeScript shell for search and mpv playback.
 See [desktop setup and verification](docs/shell-development.md).
 
-## Release 0.1.0
+## Release 0.2.0
+
+For Linux x86_64, download `Fuzzy-Music-0.2.0-linux-x86_64.AppImage`, make it
+executable and open it. The app offers a verified yt-dlp download on first
+launch; missing mpv and optional ffmpeg can be installed after selecting the
+system-package consent checkbox and approving the desktop administrator prompt.
+See [0.2.0 release notes](docs/releases/v0.2.0.md) and
+[Linux setup](docs/linux-appimage.md). Windows users should use the portable
+0.2.0 ZIP and its included setup script. The source archives are not application
+downloads. Neither platform binary is signed.
+
+### Previous Release 0.1.0
 
 The first public release targets Windows x64 portable. Download the application
 ZIP, not the corresponding-source ZIP, and run its included runtime setup script
@@ -19,7 +30,9 @@ See [release notes and limitations](docs/releases/v0.1.0.md)
 and [Windows setup](docs/windows-alpha.md). Linux x86_64 users can download
 `Fuzzy-Music-0.1.0-linux-x86_64.AppImage`; it requires host-installed `mpv` and
 an up-to-date `yt-dlp`, plus optional `ffmpeg` for FLAC. See
-[Linux AppImage setup](docs/linux-appimage.md). Neither platform binary is signed.
+[Linux AppImage setup](docs/linux-appimage.md). The published 0.1.0 AppImage
+still uses host tools; the verified adjacent-tool setup is for the next
+AppImage build. Neither platform binary is signed.
 
 The player supports pause/resume, position/seek and volume through mpv JSON IPC. See
 [`tasks/playback-controls.md`](tasks/playback-controls.md) for verification and

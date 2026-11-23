@@ -324,8 +324,10 @@ pinned SHA-256 verification and atomic publication into the user data directory.
 System packages require a separate explicit consent checkbox; only fixed
 mpv/ffmpeg package arguments are allowed, through host pkexec and its desktop
 authentication agent. No shell or user-supplied command crosses IPC. Package
-installation has a ten-minute deadline and process-group cleanup; window close
-cancels setup. AppImage child media tools clear bundled library/Python overrides.
+installation has a root-owned ten-minute timeout. Window close cancels setup
+and attempts process-group cleanup without blocking on an elevated child;
+an already authorized transaction may finish in the background.
+AppImage child media tools clear bundled library/Python overrides.
 See decision 0020. Windows setup is unchanged.
 
 ## Error Shape

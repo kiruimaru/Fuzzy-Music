@@ -7,7 +7,7 @@ established by a hosted build or an Xvfb startup check.
 
 ## Running
 
-For 0.2.0, download `Fuzzy-Music-0.2.0-linux-x86_64.AppImage`, make it
+For 0.2.1, download `Fuzzy-Music-0.2.1-linux-x86_64.AppImage`, make it
 executable, and open it. Missing playback tools are shown inside the app.
 Press Install dependencies to download pinned, SHA256-verified yt-dlp and its
 notices into `$XDG_DATA_HOME/io.github.kiruimaru.fuzzy-music/runtime/tools`
@@ -22,8 +22,8 @@ can be retried; package failures may need manual package-manager repair.
 An explicit FUZZY_YTDLP override must be repaired manually.
 
 ```bash
-chmod +x Fuzzy-Music-0.2.0-linux-x86_64.AppImage
-./Fuzzy-Music-0.2.0-linux-x86_64.AppImage
+chmod +x Fuzzy-Music-0.2.1-linux-x86_64.AppImage
+./Fuzzy-Music-0.2.1-linux-x86_64.AppImage
 ```
 
 Without FUSE use `APPIMAGE_EXTRACT_AND_RUN=1` before that command; for the

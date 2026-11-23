@@ -1102,4 +1102,20 @@ the minimal Tauri shell.
 - A database written by a newer application version now returns the non-retryable `library_too_new` code. The setup error is kept in the managed library state, so settings, library entries and the folder picker all report the same actionable message; the renderer shows it only for this code.
 - Verification: frontend 42 tests passed; Rust workspace 65 passed, 4 ignored; rustfmt and strict clippy clean; Tauri debug build passed (CSS 21.73 kB, JS 276.37 kB).
 
+## 2026-11-23 - PR integration and Linux runtime release
+
+- Merged #32-#35 into main; GitHub reports all merged and no open PRs.
+- Added typed in-app Linux dependency status/setup, digest-verified user-data
+  yt-dlp and notices, explicit system-package consent and fixed pkexec arguments.
+- Added automatic new-tag AppImage publication alongside matching source assets.
+- Checks passed: 45 frontend tests, ten browser fixtures, 68 Rust tests (five
+  ignored), live verified runtime download, native debug build, strict Clippy,
+  rustfmt, wrapper/context/release checks and actionlint.
+- Immutable v0.2.0 Linux run 45193904521 built and smoke-tested its AppImage;
+  Windows run 45193904646 failed strict Clippy before publishing a release.
+- Reproduced and fixed the Windows-only executable-check lint for 0.2.1.
+  Added a root-owned package timeout and nonblocking best-effort cancellation;
+  an elevated transaction may finish in the background. Corrective Rust tests
+  and strict Clippy passed. New-tag publication and download verification remain.
+
 

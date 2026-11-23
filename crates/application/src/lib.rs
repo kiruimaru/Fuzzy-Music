@@ -135,7 +135,7 @@ pub struct ResolveTrackResponse {
     pub stream_url: String,
 }
 
-#[derive(Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "snake_case")]
 pub enum ErrorCode {
     InvalidInput,
@@ -145,10 +145,12 @@ pub enum ErrorCode {
     Cancelled,
     PlaybackFailed,
     StorageFailed,
+    /// The database was written by a newer application version.
+    LibraryTooNew,
     Internal,
 }
 
-#[derive(Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct AppError {
     pub code: ErrorCode,
     pub message: String,

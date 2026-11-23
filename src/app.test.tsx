@@ -29,6 +29,7 @@ vi.mock("./api", async (original) => ({
     favouritePlaylist: vi.fn().mockResolvedValue(undefined), downloadPlaylist: vi.fn().mockResolvedValue(undefined),
     cancelPlaylistDownload: vi.fn().mockResolvedValue(undefined),
     playLibrary: vi.fn().mockResolvedValue(undefined), chooseFolder: vi.fn(),
+    chooseBackground: vi.fn(), clearBackground: vi.fn().mockResolvedValue(undefined),
   },
 }));
 
@@ -36,6 +37,11 @@ vi.mock("./settings", async (original) => {
   const module = await original<typeof import("./settings")>();
   return { ...module, settingsStore: module.createMemorySettingsStore() };
 });
+
+// Tauri injects this helper in the real webview; tests only need the URL shape.
+(window as unknown as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__ = {
+  convertFileSrc: (path: string) => `http://asset.localhost/${encodeURIComponent(path)}`,
+};
 
 const track: Track = {
   id: "1", title: "Example", author: "Artist", artworkUrl: null,
@@ -505,20 +511,16 @@ test("duplicate tracks are separate queue entries; deleting current stops withou
   expect(api.play).toHaveBeenCalledTimes(1);
 });
 
-test("track error does not skip or retry and manual Next can recover", async () => {
+test("a playback error advances to the next queue track instead of stopping", async () => {
   const observed = mockQueueStatus();
   const list = await openSessionQueue();
   fireEvent.click(within(list).getByRole("button", { name: "Play queued Example" }));
   await screen.findByText("Playing");
   observed.state = "error";
-  await screen.findByText("Playback failed.");
-  observed.state = "stopped";
-  await act(async () => { await new Promise(resolve => setTimeout(resolve, 550)); });
-  expect(api.play).toHaveBeenCalledTimes(1);
-  observed.state = "playing";
-  fireEvent.click(screen.getByRole("button", { name: "Next track" }));
   await waitFor(() => expect(api.play).toHaveBeenCalledTimes(2));
   expect(vi.mocked(api.play).mock.calls[1][1].id).toBe("2");
+  expect(vi.mocked(api.play).mock.calls[1][2]).toMatchObject({ fresh: true });
+  expect(screen.getByText("2 / 3")).toBeTruthy();
 });
 
 test("unknown duration or unseekable streams disable the timeline", async () => {
@@ -754,6 +756,30 @@ test("theme and FLAC preference are saved and applied", async () => {
   fireEvent.change(screen.getByLabelText("Download quality"), { target: { value: "flac" } });
   await screen.findByText(/Requires ffmpeg/);
   await waitFor(async () => expect(await settings.getSettings()).toMatchObject({ theme: "light", downloadQuality: "flac" }));
+});
+
+test("background image and opacity are configurable in settings", async () => {
+  const settings = createMemorySettingsStore({ volume: 100 });
+  vi.mocked(api.chooseBackground).mockResolvedValue("C:/data/background.png");
+  render(<App settings={settings} />);
+  fireEvent.click(screen.getByRole("button", { name: "Settings" }));
+  await screen.findByRole("button", { name: "Choose background image" });
+  fireEvent.click(screen.getByRole("button", { name: "Choose background image" }));
+  await waitFor(() => expect(document.documentElement.style.getPropertyValue("--bg-image")).toContain("background.png"));
+  expect(document.documentElement.classList.contains("has-background")).toBe(true);
+  expect(document.documentElement.classList.contains("has-animated-background")).toBe(false);
+  expect(await settings.getSettings()).toMatchObject({ backgroundImage: "C:/data/background.png" });
+  fireEvent.change(screen.getByLabelText("Background opacity"), { target: { value: "35" } });
+  await waitFor(() => expect(document.documentElement.style.getPropertyValue("--bg-opacity")).toBe("35%"));
+  await waitFor(async () => expect((await settings.getSettings()).backgroundOpacity).toBe(35));
+  fireEvent.click(screen.getByRole("button", { name: "Remove background image" }));
+  await waitFor(() => expect(document.documentElement.style.getPropertyValue("--bg-image")).toBe("none"));
+  expect(document.documentElement.classList.contains("has-background")).toBe(false);
+  expect(api.clearBackground).toHaveBeenCalled();
+  vi.mocked(api.chooseBackground).mockResolvedValue("C:/data/background.gif");
+  fireEvent.click(screen.getByRole("button", { name: "Choose background image" }));
+  await waitFor(() => expect(document.documentElement.style.getPropertyValue("--bg-image")).toContain("background.gif"));
+  expect(document.documentElement.classList.contains("has-animated-background")).toBe(true);
 });
 
 test("artist pages open from a track and play their list in order", async () => {

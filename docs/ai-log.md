@@ -956,4 +956,25 @@ the minimal Tauri shell.
 - The banner stacks vertically and the cover shrinks below 560 px. No new dependencies, playback or storage changes.
 - Verification: frontend 37 tests passed; Rust workspace 60 passed, 4 ignored; TypeScript/Vite build and Tauri debug build passed.
 
+## 2026-11-19 — Custom player background
+
+- Settings schema version 4 adds `background_image` and `background_opacity` (0–100, default 60). The chosen file is copied into the app data directory under `background/`; only the copy is displayed and settings validate that a saved path is absolute and present.
+- Tauri's asset protocol is enabled with a scope limited to `$APPDATA/**`, and the CSP allows `asset:` and `http://asset.localhost` for images. No JavaScript dependencies were added; the `protocol-asset` feature brings `http-range`.
+- Settings offers choose/remove actions, a small preview, and a live opacity slider. The slider updates the `--bg-image`/`--bg-opacity` variables on every input event and persists 300 ms after the drag settles; the background layer sits behind the app root.
+- Verification: frontend 38 tests passed; Rust shell tests 35 passed, 3 ignored; rustfmt clean; TypeScript/Vite build and Tauri debug build passed.
+
+## 2026-11-19 — Frosted shell around the custom background
+
+- A set background now also shows through the shell: the root gains `has-background`, the sidebar and player bar switch to translucent tones with a 24 px blurred, slightly saturated backdrop, and light theme keeps its own glass colours. Without a background the original opaque surfaces are untouched.
+- GIF files were already copied untranscoded and can animate as the background; the settings hint now names the supported formats, including animated GIF.
+- Verification: frontend 38 tests passed (background test also asserts the shell class); TypeScript/Vite build and Tauri debug build passed; CSS 21.10 kB (4.82 kB gzip), JS 273.26 kB.
+
+## 2026-11-19 — Playback resilience and animated backgrounds
+
+- Long sessions could stop with a playback error when the player's cached startup entry was evicted while mpv was still reading it; the shell now pins the current track's key, eviction skips pinned entries, and expiry keeps pinned entries alive. Stop and shutdown clear the cache and its pins together.
+- A playback error no longer ends the session with auto-advance enabled: the client tries the next queue track (or the current one at the queue end) with a fresh resolve, at most twice in a row, and resets the counter after a successful play.
+- Animated backgrounds (GIF/WebP/AVIF) set `has-animated-background`; the shell drops `backdrop-filter` for them and raises the tint opacity, so a full-window animation no longer forces continuous GPU blur.
+- mpv now writes a bounded session log to the app data directory (`mpv.log`, truncated above 2 MB) for field diagnostics of playback failures.
+- Verification: frontend 38 tests passed; Rust workspace 62 passed, 4 ignored; rustfmt and strict clippy clean; Tauri debug build passed (CSS 21.50 kB, JS 273.67 kB).
+
 

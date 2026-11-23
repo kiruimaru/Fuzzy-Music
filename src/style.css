@@ -37,6 +37,41 @@
 * { box-sizing: border-box; }
 html, body, #root { height: 100%; }
 body { margin: 0; background: var(--bg); }
+#root { position: relative; z-index: 1; }
+body::before {
+  content: "";
+  position: fixed; inset: 0; z-index: 0; pointer-events: none;
+  background-image: var(--bg-image, none);
+  background-size: cover;
+  background-position: center;
+  opacity: var(--bg-opacity, 0%);
+}
+
+/* A custom background turns the shell surfaces into frosted glass so the
+   artwork stays visible behind the sidebar and the player bar. */
+:root.has-background .sidebar {
+  background: rgb(14 17 24 / 58%);
+  backdrop-filter: blur(24px) saturate(1.25);
+}
+:root.has-background .player {
+  background: rgb(13 16 23 / 66%);
+  backdrop-filter: blur(24px) saturate(1.25);
+}
+:root.has-background .nav-item.active { background: rgb(26 31 43 / 55%); }
+:root[data-theme="light"].has-background .sidebar { background: rgb(229 237 233 / 62%); }
+:root[data-theme="light"].has-background .player { background: rgb(249 251 250 / 72%); }
+:root[data-theme="light"].has-background .nav-item.active { background: rgb(229 236 233 / 70%); }
+
+/* Animated artwork repaints every frame, and a backdrop blur would then keep
+   the GPU busy continuously. Keep the tint, drop the blur, raise opacity. */
+:root.has-animated-background .sidebar,
+:root.has-animated-background .player {
+  backdrop-filter: none;
+}
+:root.has-animated-background .sidebar { background: rgb(14 17 24 / 74%); }
+:root.has-animated-background .player { background: rgb(13 16 23 / 80%); }
+:root[data-theme="light"].has-animated-background .sidebar { background: rgb(229 237 233 / 78%); }
+:root[data-theme="light"].has-animated-background .player { background: rgb(249 251 250 / 86%); }
 
 .sr-only {
   position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
@@ -315,8 +350,14 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 .library-error { color: #ff9c9c; margin: 0; font-size: 13px; }
 .settings-view { display: grid; gap: 12px; max-width: 620px; }
 .settings-view h2 { font-size: 20px; margin: 0 0 12px; }
+.settings-view h3 { font-size: 15px; margin: 10px 0 0; }
 .settings-view label { font-size: 13px; color: var(--muted); }
 .settings-view select, .folder-setting { border: 1px solid var(--line); border-radius: 6px; padding: 10px; background: var(--panel); color: var(--text); font: inherit; }
+.background-setting { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.background-preview { width: 132px; height: 74px; object-fit: cover; border-radius: 10px; border: 1px solid var(--line); }
+.background-opacity { display: flex; align-items: center; gap: 12px; }
+.background-opacity input { flex: 1 1 auto; }
+.background-opacity span { min-width: 42px; font-size: 13px; color: var(--muted); }
 .folder-setting { display: flex; align-items: center; gap: 12px; justify-content: space-between; }
 .folder-setting span { overflow-wrap: anywhere; min-width: 0; }
 .folder-setting button { flex-shrink: 0; }

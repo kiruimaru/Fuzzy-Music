@@ -28,8 +28,8 @@ binaries from this project.
 - Relevant files: `scripts/setup-linux-runtime.sh`, `scripts/linux-runtime-tool.sh`,
   `scripts/package-appimage.sh`, `.github/workflows/platform-assets.yml`.
 - Decision: `docs/decisions/0019-linux-runtime-setup.md`.
-- The repo is currently on `feat/linux-runtime-bootstrap`, based on the open
-  PR stack through #35.
+- Work started on `feat/linux-runtime-bootstrap` above the PR stack through
+  #35; that stack and the runtime setup are now merged into main.
 
 ## Progress
 
@@ -48,9 +48,10 @@ binaries from this project.
 
 ### Remaining
 
-- Build an AppImage on the now-prepared Linux host.
-- Build and manually test the next-version AppImage with mpv installed.
-- Publish only under a new version; do not replace v0.1.0 assets.
+- Completed by the 0.2.1 release: hosted AppImage build, publication, independent
+  public download/hash/provenance verification and native startup on Arch.
+- Privileged installation on a clean machine and human listening remain manual
+  acceptance work. Published v0.1.0 assets were not replaced.
 
 ## Verification
 
@@ -95,7 +96,7 @@ Downloaded yt-dlp and verified its executable and both license SHA256 hashes; mp
 - Current branch: `feat/linux-runtime-bootstrap`.
 - Files changed: Linux runtime scripts/workflow, dependency diagnostics,
   release documentation, decision and task context.
-- Known risks: native debug build and startup are verified, but live search,
-  audible playback and next-version AppImage acceptance remain unverified.
-- Next action: build and test the AppImage on the prepared Linux host,
-  after stacked PR review/CI.
+- Known risks: native debug and published 0.2.1 AppImage startup are verified;
+  live search, audible playback and privileged clean-machine setup need acceptance.
+- Publication is complete; see `release-0.2.0.md` for 0.2.1 workflow and artifact
+  verification results.

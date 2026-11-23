@@ -14,7 +14,7 @@ runtime setup, without changing previously published 0.1.0 assets.
 - Downloads use fixed upstream URLs, pinned hashes, limits and atomic writes.
 - Host package installation uses fixed arguments via pkexec with explicit consent.
 - Added new-tag AppImage build/publication workflow and 0.2.0 release notes.
-- Publication and independent download verification are pending.
+- Published corrective 0.2.1 after the unpublished 0.2.0 attempt.
 - Immutable v0.2.0 triggered Linux run 45193904521 (AppImage build/startup
   passed) and Windows run 45193904646 (strict Clippy failed before publication).
 - Reproduced and fixed Windows-only needless_bool lint for new v0.2.1.
@@ -30,11 +30,20 @@ runtime setup, without changing previously published 0.1.0 assets.
 - Linux wrapper tests, context smoke and eight release Node tests passed.
 - Strict Clippy, rustfmt, native debug build and actionlint passed.
 - Corrective 0.2.1: 68 Rust tests passed, five ignored; strict Clippy passed.
-- GitHub workflows/publication remain to be run from the new immutable tag.
+- Immutable v0.2.1 points to `5326c2531dc616bf3962ada670d4790258b616e0`.
+- Windows run `45197019327` and Linux run `45197019220` passed all jobs.
+- All twelve public assets downloaded; six SHA256 sidecars passed.
+- Corresponding-source and Windows/Linux provenance match the tag commit/tree;
+  both packaged executable digests were independently verified.
+- Downloaded AppImage opened a mapped, non-hidden native window on Arch with
+  extract-and-run and the process-local WebKit workaround. The isolated smoke
+  service was stopped without touching the user's library.
+- Final 0.2.1 local checks: native debug build, 45 frontend tests, ten browser
+  fixtures, wrapper checks and eight release Node tests passed.
 
 ## Handoff
 
-Remaining: finalize checks, commit corrective work, integrate it into main,
-push immutable v0.2.1 tag, monitor both platform workflows, download and verify
-published assets. Human listening and privileged clean-machine installation
-are not established by fixtures or the download test.
+Requested integration and publication are complete. No open PRs remain.
+Human listening, broader distribution acceptance and privileged clean-machine
+installation are not established by fixtures, native startup or the download
+test. Keep v0.1.0 and v0.2.0 immutable.

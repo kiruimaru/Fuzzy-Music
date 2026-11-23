@@ -1,7 +1,7 @@
 # Fuzzy Music Project Context
 
 **Last reviewed:** 2026-11-23
-**Status:** PRs #32-#35 merged; corrective 0.2.1 release is being prepared after unpublished 0.2.0 Windows lint failure; published 0.1.0 assets remain unchanged
+**Status:** PRs #32-#35 merged; 0.2.1 published for Linux and Windows with in-app Linux runtime setup; published 0.1.0 assets remain unchanged
 
 ## Product
 
@@ -48,8 +48,17 @@ response formats inside the source adapter.
 
 ## Known state
 
+- [Release 0.2.1](https://github.com/kiruimaru/Fuzzy-Music/releases/tag/v0.2.1)
+  is published as Latest at `5326c25`. Windows run `45197019327` and Linux run
+  `45197019220` passed all jobs. All twelve assets were independently downloaded;
+  six SHA256 sidecars, matching application commit/tree and Linux/Windows
+  executable provenance passed. The downloaded AppImage opened a mapped native
+  window on this Arch desktop with extract-and-run and the WebKit workaround.
+  The isolated smoke instance was stopped. In-app pinned yt-dlp download is
+  live-tested; privileged clean-machine installation and human listening are
+  not established. See `../tasks/release-0.2.0.md`.
 - [Release 0.1.0](https://github.com/kiruimaru/Fuzzy-Music/releases/tag/v0.1.0)
-  is published as Latest, tagged at `5baa7c2` after PR #29. Workflow
+  was the previous Latest, tagged at `5baa7c2` after PR #29. Workflow
   `44706880926` passed Windows tests, optimized build, corresponding-source
   packaging, checksums and publication. The portable ZIP and matching source
   ZIP plus SHA256 sidecars were downloaded and verified after publication.
@@ -70,8 +79,8 @@ response formats inside the source adapter.
   host now has the required WebKitGTK development packages, mpv and yt-dlp
   installed by the owner. The current working tree's standalone debug build
   and native window launch passed, along with 66 Rust tests (four ignored).
-  The new binary runs in `fuzzy-music-local.service`; live playback and the
-  next-version AppImage remain unverified.
+  That debug service is no longer running. Current AppImage startup verification
+  is recorded above; live playback and privileged setup remain unverified.
 - The owner authorized integration of all open PRs. #32-#35 are merged into
   main at `7eb3545`, with their stacked base branches fast-forwarded so GitHub
   records all four as merged; the open-PR query is empty.
@@ -82,7 +91,8 @@ response formats inside the source adapter.
   Linux run 45193904521 built and smoke-tested the AppImage, but Windows run
   45193904646 failed strict Clippy before publication. The Windows-specific
   lint was reproduced and fixed for 0.2.1, alongside a root-owned package
-  timeout and nonblocking best-effort elevated-child cancellation.
+  timeout and nonblocking best-effort elevated-child cancellation. The new
+  0.2.1 workflows and publication passed.
 - PRs #24–#27 were already merged when this session started. The remaining
   PR #28 was validated and merged as `224ecbd`; no open PRs remained at the
   final integration check. Main now includes the local library/settings,

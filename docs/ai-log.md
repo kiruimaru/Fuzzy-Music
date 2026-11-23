@@ -1118,4 +1118,21 @@ the minimal Tauri shell.
   an elevated transaction may finish in the background. Corrective Rust tests
   and strict Clippy passed. New-tag publication and download verification remain.
 
+## 2026-11-23 - Release 0.2.1 published and verified
+
+- Published immutable v0.2.1 at `5326c25`; Windows workflow `45197019327` and
+  Linux workflow `45197019220` passed, including no-media-tools AppImage startup.
+- Independently downloaded all twelve release assets. Six SHA256 sidecars and
+  matching source commit/tree passed; Windows and Linux packaged executable
+  hashes match their provenance. No prior release assets or tags were replaced.
+- Downloaded AppImage opened a mapped native window on Arch using extract-and-run
+  and the process-local WebKit workaround. Used isolated data/config/cache;
+  stopped the smoke service afterwards. No listening or privileged clean-machine
+  package installation was claimed.
+- Final local checks: 68 Rust tests (five ignored), 45 frontend tests, ten browser
+  fixtures, native debug build, strict Clippy/rustfmt, wrappers, eight release
+  tests and context checks passed. GitHub open-PR list is empty.
+- Added direct Linux download and release links to README. Task contexts retain
+  remaining broad-platform and manual runtime-setup acceptance limits.
+
 

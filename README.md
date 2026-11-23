@@ -10,6 +10,10 @@ See [desktop setup and verification](docs/shell-development.md).
 
 ## Release 0.2.1
 
+[Download Linux x86_64 AppImage](https://github.com/kiruimaru/Fuzzy-Music/releases/download/v0.2.1/Fuzzy-Music-0.2.1-linux-x86_64.AppImage)
+or open the [0.2.1 release](https://github.com/kiruimaru/Fuzzy-Music/releases/tag/v0.2.1)
+for Windows and checksums.
+
 For Linux x86_64, download `Fuzzy-Music-0.2.1-linux-x86_64.AppImage`, make it
 executable and open it. The app offers a verified yt-dlp download on first
 launch; missing mpv and optional ffmpeg can be installed after selecting the

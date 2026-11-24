@@ -8,7 +8,7 @@ import { createMemorySettingsStore, type SettingsStore } from "./settings";
 vi.mock("./api", async (original) => ({
   ...await original<typeof import("./api")>(),
   api: {
-    runtimeStatus: vi.fn().mockResolvedValue({ supported: false }),
+    runtimeStatus: vi.fn().mockResolvedValue({ supported: false, platform: "other" }),
     installRuntime: vi.fn(),
     search: vi.fn(), cancelSearch: vi.fn().mockResolvedValue(undefined),
     play: vi.fn(), stop: vi.fn().mockResolvedValue(undefined),
@@ -69,7 +69,7 @@ afterEach(() => { cleanup(); vi.clearAllMocks(); });
 beforeEach(() => {
   vi.resetAllMocks();
   vi.mocked(api.runtimeStatus).mockResolvedValue({
-    supported: false, ytDlp: true, mpv: true, ffmpeg: true, canInstallPackages: false,
+    supported: false, platform: "other", ytDlp: true, mpv: true, ffmpeg: true, canInstallPackages: false,
   });
   for (const method of [api.cancelSearch, api.stop, api.prepare, api.prefetch,
     api.cancelPreparation, api.cancelPlaylists, api.cancelArtists, api.cancelRelated, api.pause, api.seek, api.volume]) {
@@ -775,10 +775,18 @@ test("background image and opacity are configurable in settings", async () => {
   await waitFor(() => expect(document.documentElement.style.getPropertyValue("--bg-image")).toContain("background.png"));
   expect(document.documentElement.classList.contains("has-background")).toBe(true);
   expect(document.documentElement.classList.contains("has-animated-background")).toBe(false);
+  expect(document.querySelector("img.app-background")?.getAttribute("src")).toContain("background.png");
   expect(await settings.getSettings()).toMatchObject({ backgroundImage: "C:/data/background.png" });
   fireEvent.change(screen.getByLabelText("Background opacity"), { target: { value: "35" } });
   await waitFor(() => expect(document.documentElement.style.getPropertyValue("--bg-opacity")).toBe("35%"));
   await waitFor(async () => expect((await settings.getSettings()).backgroundOpacity).toBe(35));
+  // The background lives outside the settings view so an animated image keeps
+  // running when the preview unmounts during navigation.
+  fireEvent.click(screen.getByRole("button", { name: "Favourites" }));
+  expect(document.querySelector("img.background-preview")).toBeNull();
+  expect(document.querySelector("img.app-background")?.getAttribute("src")).toContain("background.png");
+  fireEvent.click(screen.getByRole("button", { name: "Settings" }));
+  await screen.findByRole("button", { name: "Remove background image" });
   fireEvent.click(screen.getByRole("button", { name: "Remove background image" }));
   await waitFor(() => expect(document.documentElement.style.getPropertyValue("--bg-image")).toBe("none"));
   expect(document.documentElement.classList.contains("has-background")).toBe(false);

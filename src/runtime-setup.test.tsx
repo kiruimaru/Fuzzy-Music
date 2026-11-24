@@ -9,7 +9,7 @@ vi.mock("./api", async original => ({
   api: { runtimeStatus: vi.fn(), installRuntime: vi.fn() },
 }));
 afterEach(() => { cleanup(); vi.resetAllMocks(); });
-const missing = { supported: true, ytDlp: false, mpv: false, ffmpeg: false, canInstallPackages: true };
+const missing = { supported: true, platform: "linux" as const, ytDlp: false, mpv: false, ffmpeg: false, canInstallPackages: true };
 
 test("system packages require explicit consent and successful setup removes first-run panel", async () => {
   vi.mocked(api.runtimeStatus).mockResolvedValue(missing);
@@ -38,4 +38,19 @@ test("settings keeps ready dependency status available", async () => {
   render(<RuntimeSetup settings />);
   expect(await screen.findByLabelText("Runtime setup")).toBeTruthy();
   expect(screen.queryByRole("button", { name: "Install dependencies" })).toBeNull();
+});
+
+test("windows installs local tools without a system package option", async () => {
+  const windowsMissing = {
+    supported: true, platform: "windows" as const,
+    ytDlp: false, mpv: false, ffmpeg: false, canInstallPackages: false,
+  };
+  vi.mocked(api.runtimeStatus).mockResolvedValue(windowsMissing);
+  vi.mocked(api.installRuntime).mockResolvedValue({ ...windowsMissing, ytDlp: true, mpv: true });
+  render(<RuntimeSetup settings />);
+  expect(await screen.findByLabelText("Runtime setup")).toBeTruthy();
+  expect(screen.getByText(/tools folder/)).toBeTruthy();
+  expect(screen.queryByLabelText("Install system packages (administrator approval)")).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "Install dependencies" }));
+  await waitFor(() => expect(api.installRuntime).toHaveBeenCalledWith(false, false));
 });

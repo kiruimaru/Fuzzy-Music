@@ -971,6 +971,8 @@ export function App({ settings = settingsStore }: { settings?: SettingsStore }) 
   }
 
   return <div className="app">
+    {preferences.backgroundImage &&
+      <img className="app-background" src={backgroundUrl(preferences.backgroundImage)} alt="" aria-hidden="true" />}
     <aside className="sidebar" aria-label="Navigation">
       <div className="brand"><img className="brand-mark" src={blackMascot} alt="" /><span>Fuzzy Music</span></div>
       <nav className="nav">
@@ -1284,8 +1286,10 @@ export function App({ settings = settingsStore }: { settings?: SettingsStore }) 
           <button className="volume-trigger icon-btn" aria-label="Volume controls" title="Volume"><Volume2 /></button>
           <div className="volume-popup">
           <label htmlFor="volume" className="sr-only">Volume</label>
-          <input id="volume" type="range" min="0" max="100" step="1" value={volumeDraft ?? volume} disabled={!active}
-            onChange={event => changeVolume(Number(event.target.value))} />
+          <div className="volume-range">
+            <input id="volume" type="range" min="0" max="100" step="1" value={volumeDraft ?? volume} disabled={!active}
+              onChange={event => changeVolume(Number(event.target.value))} />
+          </div>
           <output>{Math.round(volumeDraft ?? volume)}%</output>
           </div>
         </div>

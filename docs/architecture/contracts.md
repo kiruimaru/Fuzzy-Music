@@ -313,10 +313,12 @@ links are neither persisted nor exposed to the interface. See decision 0010.
 
 `runtime_status(): Promise<RuntimeStatus>` checks executable availability off
 the UI thread. `install_runtime({installSystem: boolean, ffmpeg: boolean})`
-returns the same status. `RuntimeStatus` contains `supported`, `ytDlp`, `mpv`,
-`ffmpeg`, and `canInstallPackages`, all booleans; it never exposes local paths.
-Only Linux x86_64 supports in-app installation. Missing tools are shown on
-startup and status remains available in Settings.
+returns the same status. `RuntimeStatus` contains `supported`, `platform`
+(`linux`, `windows` or `other`), `ytDlp`, `mpv`, `ffmpeg`, and
+`canInstallPackages`; it never exposes local paths.
+Linux x86_64 and Windows x64 support in-app installation; installing system
+packages remains Linux-only. Missing tools are shown on startup and status
+remains available in Settings.
 
 Installation requires an explicit frontend action. yt-dlp and its notices
 are downloaded from fixed upstream HTTPS URLs, with bounded bytes/deadlines,

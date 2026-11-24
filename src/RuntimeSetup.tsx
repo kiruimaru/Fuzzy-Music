@@ -17,6 +17,9 @@ export function RuntimeSetup({ settings = false }: { settings?: boolean }) {
 
   if (!status?.supported || (!settings && status.ytDlp && status.mpv)) return null;
 
+  const windows = status.platform === "windows";
+  const linux = status.platform === "linux";
+
   async function install() {
     setBusy(true);
     setError("");
@@ -32,8 +35,13 @@ export function RuntimeSetup({ settings = false }: { settings?: boolean }) {
       <div><dt>mpv</dt><dd>{status.mpv ? "Ready" : "Missing"}</dd></div>
       <div><dt>ffmpeg (FLAC)</dt><dd>{status.ffmpeg ? "Ready" : "Optional"}</dd></div>
     </dl>
-    {(!status.mpv || !status.ffmpeg) && <label className="runtime-option">
-      <input type="checkbox" checked={system} disabled={busy || !status.canInstallPackages}
+    <p className="runtime-hint">
+      {windows
+        ? "Downloads verified mpv and yt-dlp into the app's tools folder. Administrator approval is not required."
+        : "Downloads verified yt-dlp. mpv and optional ffmpeg can be installed with your distribution's package manager."}
+    </p>
+    {linux && status.canInstallPackages && (!status.mpv || !status.ffmpeg) && <label className="runtime-option">
+      <input type="checkbox" checked={system} disabled={busy}
         onChange={event => setSystem(event.target.checked)} />
       Install system packages (administrator approval)
     </label>}
@@ -52,6 +60,9 @@ export function RuntimeSetup({ settings = false }: { settings?: boolean }) {
       </button>
     </div>
     {error && <p role="alert">{error}</p>}
-    {!status.canInstallPackages && !status.mpv && <p role="alert">Install mpv with your distribution's package manager.</p>}
+    {linux && !status.canInstallPackages && !status.mpv &&
+      <p role="alert">Install mpv with your distribution's package manager.</p>}
+    {windows && (!status.ytDlp || !status.mpv) &&
+      <p className="runtime-hint">Restart Fuzzy Music after installing the tools if playback is still unavailable.</p>}
   </section>;
 }

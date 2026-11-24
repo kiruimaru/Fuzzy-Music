@@ -20,8 +20,9 @@ launch; missing mpv and optional ffmpeg can be installed after selecting the
 system-package consent checkbox and approving the desktop administrator prompt.
 See [0.2.1 release notes](docs/releases/v0.2.1.md) and
 [Linux setup](docs/linux-appimage.md). Windows users should use the portable
-0.2.1 ZIP and its included setup script. The source archives are not application
-downloads. Neither platform binary is signed.
+0.2.1 ZIP and its included setup script; the next build also offers the same
+verified dependency installation inside Settings. The source archives are not
+application downloads. Neither platform binary is signed.
 
 ### Previous Release 0.1.0
 

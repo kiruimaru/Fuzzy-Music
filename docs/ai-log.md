@@ -1135,4 +1135,11 @@ the minimal Tauri shell.
 - Added direct Linux download and release links to README. Task contexts retain
   remaining broad-platform and manual runtime-setup acceptance limits.
 
+## 2026-11-24 — Linux presentation fixes and Windows runtime parity
+
+- The vertical volume slider now uses a horizontal input rotated by -90 degrees, so pointer dragging, painting and keyboard input share one vertical axis on WebKitGTK instead of the previous `writing-mode` visual-only flip.
+- The custom background is now a persistent `<img class="app-background">` outside the view content instead of a `body::before` background image. Leaving Settings unmounts only the preview; the animated GIF/WebP/AVIF element stays alive for the whole session.
+- Windows x64 now shares the in-app runtime setup: the same pinned mpv 20261111 and yt-dlp 2026.10.26 releases used by `setup-windows-runtime.ps1` are downloaded with SHA-256 verification, extracted with Windows `tar`, and kept with licenses and provenance beside the executable. The system-package checkbox remains Linux-only; the external script remains for manual/offline setup.
+- Verification: frontend 46 tests passed; the live Windows runtime test downloaded, verified and extracted both tools; rustfmt and strict clippy clean; Tauri debug build passed.
+
 

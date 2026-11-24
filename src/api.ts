@@ -76,6 +76,7 @@ export type PlaylistEntry = {
 
 export type RuntimeStatus = {
   supported: boolean;
+  platform: "linux" | "windows" | "other";
   ytDlp: boolean;
   mpv: boolean;
   ffmpeg: boolean;

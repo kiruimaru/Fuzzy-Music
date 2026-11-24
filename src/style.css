@@ -37,13 +37,12 @@
 * { box-sizing: border-box; }
 html, body, #root { height: 100%; }
 body { margin: 0; background: var(--bg); }
-#root { position: relative; z-index: 1; }
-body::before {
-  content: "";
-  position: fixed; inset: 0; z-index: 0; pointer-events: none;
-  background-image: var(--bg-image, none);
-  background-size: cover;
-  background-position: center;
+#root { position: relative; z-index: 1; isolation: isolate; }
+.app-background {
+  position: fixed; inset: 0; z-index: -1;
+  width: 100%; height: 100%;
+  object-fit: cover;
+  pointer-events: none;
   opacity: var(--bg-opacity, 0%);
 }
 
@@ -470,7 +469,17 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
     transform var(--motion-base) var(--ease-out),
     visibility 0s;
 }
-.volume-popup input[type="range"] { writing-mode: vertical-lr; direction: rtl; width: 20px; height: 120px; }
+.volume-popup input[type="range"] {
+  /* A rotated horizontal input is vertical for both painting and pointer
+     coordinates on WebKitGTK; writing-mode only flips the visual axis there. */
+  width: 120px; height: 4px;
+  transform: rotate(-90deg);
+  transform-origin: center;
+}
+.volume-range {
+  display: grid; place-items: center;
+  width: 24px; height: 120px;
+}
 .volume-popup output { min-width: 36px; text-align: center; }
 .queue-control { position: relative; flex: none; }
 .queue-popup {
@@ -589,6 +598,7 @@ input[type="range"]:disabled::-webkit-slider-thumb { cursor: default; }
 }
 .runtime-setup { padding: 16px 0; border-bottom: 1px solid var(--line); }
 .runtime-setup h3 { margin: 0 0 12px; font-size: 16px; }
+.runtime-hint { margin: 0 0 10px; color: var(--muted); font-size: 12.5px; line-height: 1.5; }
 .runtime-status { display: flex; flex-wrap: wrap; gap: 24px; margin: 0 0 12px; }
 .runtime-status div { display: flex; gap: 8px; }
 .runtime-status dd { margin: 0; opacity: 0.7; }
